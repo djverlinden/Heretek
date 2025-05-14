@@ -84,9 +84,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         println!("[{ts}] 🔄 Versiewijzigingsverzoek ontvangen: {line}");
                     } else {
                         if let Ok(server) = mock.lock() {
-                            println!("[{ts}] [v{}] 📩 Commando ontvangen: {line}", server.get_version().as_number());
+                            println!("[{ts}] [v{}] 📩 Ontvangen: {line}", server.get_version().as_number());
                         } else {
-                            println!("[{ts}] 📩 Commando ontvangen: {line}");
+                            println!("[{ts}] 📩 Ontvangen: {line}");
                         }
                     }
                 }
@@ -170,9 +170,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     if let Ok(server) = mock.lock() {
                         let version = server.get_version();
                         let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
-                        println!("[{ts}] [v{}] 🔧 Uitvoeren: {}", version.as_number(), line.trim());
-                        server.handle_command(&line)
+                        println!("[{ts}] [v{}] 🟢 Uitvoeren: {}", version.as_number(), line.trim());
+                        let response = server.handle_command(&line);
+                        println!("[{ts}] [v{}] ✅ Voltooid: {}", version.as_number(), line.trim());
+                        response
+                        // Reeds verwerkt hierboven
                     } else {
+                        let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+                        println!("[{ts}] 🔴 Uitvoeren mislukt: {}", line.trim());
                         "❌ Kon server niet vergrendelen om commando te verwerken\n".to_string()
                     }
                 };
