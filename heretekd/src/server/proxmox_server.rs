@@ -85,12 +85,19 @@ impl ProxmoxServer {
     
     /// Laadt de commando configuratie uit de YAML-bestanden
     fn load_command_config() -> CommandConfig {
-        // Probeer verschillende paden voor de commands directory
-        let possible_paths = [
-            "commands",
-            "heretekd/commands", 
-            "../commands"
-        ];
+        // Controleer of er een aangepast pad is opgegeven via een omgevingsvariabele
+        let mut possible_paths = Vec::new();
+        
+        if let Ok(custom_path) = std::env::var("HERETEK_COMMANDS_PATH") {
+            possible_paths.push(custom_path);
+        }
+        
+        // Voeg standaard paden toe
+        possible_paths.extend_from_slice(&[
+            "commands".to_string(),
+            "heretekd/commands".to_string(), 
+            "../commands".to_string()
+        ]);
         
         for path in possible_paths.iter() {
             let loader = CommandLoader::new(path);

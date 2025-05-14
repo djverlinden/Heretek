@@ -7,18 +7,27 @@ pub type CommandVersions = HashMap<String, String>;
 #[derive(Debug, Deserialize)]
 pub struct CommandConfig {
     #[serde(default)]
+    #[serde(alias = "common")]
     pub common_commands: CommandVersions,
     #[serde(deserialize_with = "deserialize_version_commands")]
+    #[serde(alias = "versions")]
     pub version_commands: HashMap<u8, CommandVersions>,
 }
 
 pub fn load_command_yaml(command_type: &str) -> CommandConfig {
-    // Probeer eerst het bestand in de root directory, daarna in heretekd/commands
-    let yaml_paths = [
+    // Check if a custom path is specified via environment variable
+    let mut yaml_paths = Vec::new();
+    
+    if let Ok(custom_path) = std::env::var("HERETEK_COMMANDS_PATH") {
+        yaml_paths.push(format!("{}/{}.yaml", custom_path, command_type));
+    }
+    
+    // Add default paths
+    yaml_paths.extend_from_slice(&[
         format!("commands/{}.yaml", command_type),
         format!("heretekd/commands/{}.yaml", command_type),
         format!("../commands/{}.yaml", command_type),
-    ];
+    ]);
     
     let mut yaml_content = None;
     let mut error_message = String::new();

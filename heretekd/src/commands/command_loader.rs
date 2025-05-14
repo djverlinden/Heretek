@@ -6,7 +6,11 @@ pub type CommandVersions = HashMap<String, String>;
 
 #[derive(Debug, Deserialize)]
 pub struct CommandConfig {
+    #[serde(default)]
+    #[serde(alias = "common")]
+    pub common_commands: CommandVersions,
     #[serde(deserialize_with = "deserialize_version_commands")]
+    #[serde(alias = "versions")]
     pub version_commands: HashMap<u8, CommandVersions>,
 }
 
@@ -29,11 +33,19 @@ where
 
 pub fn load_command_yaml(command_type: &str) -> CommandConfig {
     // Probeer verschillende paden voor de commands
-    let paths = [
+    let mut paths = Vec::new();
+    
+    // Controleer of er een aangepast pad is opgegeven via een omgevingsvariabele
+    if let Ok(custom_path) = std::env::var("HERETEK_COMMANDS_PATH") {
+        paths.push(Path::new(&custom_path).join(format!("{}.yaml", command_type)));
+    }
+    
+    // Voeg standaard paden toe
+    paths.extend_from_slice(&[
         Path::new("commands").join(format!("{}.yaml", command_type)),
         Path::new("heretekd/commands").join(format!("{}.yaml", command_type)),
         Path::new("../commands").join(format!("{}.yaml", command_type)),
-    ];
+    ]);
     
     let mut yaml_content = None;
     let mut error_message = String::new();
@@ -63,6 +75,6 @@ mod tests {
     #[test]
     fn test_load_command_yaml() {
         let config = load_command_yaml("container");
-        assert!(config.version_commands.contains_key(&8));
+        assert!(config.version_commands.contains_key(&7));
     }
 }

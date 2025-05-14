@@ -13,28 +13,32 @@ fn setup_test_config() {
     // Zorg dat we in de heretekd directory zijn
     let test_dir = env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
     
-    // Maak de commands directory aan en verplaats de yaml bestanden
-    let commands_dir = test_dir.join("config").join("commands");
-    if !commands_dir.exists() {
-        fs::create_dir_all(&commands_dir).expect("Kon commands directory niet aanmaken");
-    }
-    
-    // Kopieer test configuraties van tests/commands naar config/commands
-    let test_commands_dir = test_dir.join("tests").join("commands");
+    // Maak een tijdelijke test commands directory aan
+    let test_commands_dir = test_dir.join("tests").join("tmp_commands");
     if test_commands_dir.exists() {
-        for entry in fs::read_dir(&test_commands_dir).expect("Kon test commands directory niet lezen") {
+        // Verwijder oude test bestanden als deze bestaan
+        fs::remove_dir_all(&test_commands_dir).expect("Kon oude test directory niet verwijderen");
+    }
+    fs::create_dir_all(&test_commands_dir).expect("Kon tijdelijke test directory niet aanmaken");
+    
+    // Kopieer test configuraties van tests/commands naar de tijdelijke directory
+    let source_commands_dir = test_dir.join("tests").join("commands");
+    if source_commands_dir.exists() {
+        for entry in fs::read_dir(&source_commands_dir).expect("Kon test commands directory niet lezen") {
             if let Ok(entry) = entry {
                 let source = entry.path();
                 if source.extension().map_or(false, |ext| ext == "yaml") {
-                    let dest = commands_dir.join(source.file_name().unwrap());
+                    let dest = test_commands_dir.join(source.file_name().unwrap());
                     fs::copy(&source, &dest).expect("Kon configuratiebestand niet kopiëren");
                 }
             }
         }
     }
     
-    println!("Test config directory aangemaakt en configuraties gekopieerd: {:?}", commands_dir);
+    println!("Tijdelijke test directory aangemaakt en configuraties gekopieerd: {:?}", test_commands_dir);
     
+    // Stel de test directory in als tijdelijke pad voor de commands in de mock server
+    env::set_var("HERETEK_COMMANDS_PATH", test_commands_dir.to_str().unwrap());
 }
 
 #[test]

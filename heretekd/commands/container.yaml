@@ -1,45 +1,11 @@
-common_commands:
-  pct list: |
-    VMID       Status     Name
-    100        running    test-container
-    101        stopped    debian-11
-    102        running    ubuntu-lts
 
-  pct start: |
-    starting container...
-    started successfully
+common:
+  "pct list": |
+    VMID   NAME             STATUS     MEM(MB)    DISK(GB)  UPTIME
+    100    test-container   running    2048       32.00     1d 4h 35m
+    101    backup-server    stopped    1024       10.00     -
 
-  pct stop: |
-    stopping container...
-    stopped successfully
-
-  pct create: |
-    creating container...
-    created successfully
-
-  pct destroy: |
-    destroying container...
-    destroyed successfully
-
-  pct snapshot: |
-    creating snapshot...
-    snapshot created successfully
-
-  pct migrate: |
-    migrating container...
-    migration successful
-
-  pct restore: |
-    restoring container...
-    restore successful
-
-version_commands:
+versions:
   7:
-    pct rollback 100 snap1: |
-      rolling back container 100 to snapshot snap1...
-      rollback successful
-
-  8:
-    pct clone 100 106: |
-      cloning container 100 to 106...
-      cloning successful
+    "pct rollback 100 snap1": |
+      rollback complete

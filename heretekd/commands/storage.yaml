@@ -1,92 +1,27 @@
-common_commands:
-  zfs list: |
+common:
+  "zfs list": |
     NAME              USED  AVAIL  REFER  MOUNTPOINT
     rpool             3.50G   96.5G   384K  /rpool
     rpool/data        1.20G   95.3G   1.20G  /rpool/data
     rpool/vm-images   2.30G   94.2G   2.30G  /rpool/vm-images
 
-  zfs create: |
-    filesystem created successfully
-
-  zfs destroy: |
-    filesystem destroyed successfully
-
-  pvesm status: |
+  "pvesm status": |
     Name             Type     Status           Total            Used        Available
     local             dir      active           458.4G          25.4G          433.0G
     local-lvm         lvm      active           458.4G          25.4G          433.0G
     local-zfs         zfs      active           458.4G          25.4G          433.0G
 
-  pvesm alloc: |
-    allocated storage successfully
-
-  pvesm remove: |
-    removed storage successfully
-
-  pveam available: |
-    system          ubuntu-20.04-standard_20.04-1_amd64.tar.gz
-    system          debian-11-standard_11.0-1_amd64.tar.gz
-    system          centos-8-default_8.0-1_amd64.tar.gz
-
-  pveam download: |
-    downloading template...
-    download successful
-
-  pveam list: |
-    local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz  328MB
-    local:vztmpl/debian-11-standard_11.0-1_amd64.tar.gz  275MB
-
-  vzdump: |
-    starting backup...
-    backup successful
-
-version_commands:
-  8:
-    pvesm status: |
-      Name             Type     Status           Total            Used        Available
-      local             dir      active           458.4G          25.4G          433.0G
-      local-lvm         lvm      active           458.4G          25.4G          433.0G
-      local-zfs         zfs      active           458.4G          25.4G          433.0G
-
-    pvesm alloc: |
-      allocated storage successfully
-
-    pvesm remove: |
-      removed storage successfully
-
-    zfs list: |
-      NAME              USED  AVAIL  REFER  MOUNTPOINT
-      rpool             3.50G   96.5G   384K  /rpool
-      rpool/data        1.20G   95.3G   1.20G  /rpool/data
-      rpool/vm-images   2.30G   94.2G   2.30G  /rpool/vm-images
-
-    zfs create: |
-      filesystem created successfully
-
-    zfs destroy: |
-      filesystem destroyed successfully
-
-    pveam available: |
-      system          ubuntu-20.04-standard_20.04-1_amd64.tar.gz
-      system          debian-11-standard_11.0-1_amd64.tar.gz
-      system          centos-8-default_8.0-1_amd64.tar.gz
-
-    pveam download: |
-      downloading template...
-      download successful
-
-    pveam list: |
-      local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz  328MB
-      local:vztmpl/debian-11-standard_11.0-1_amd64.tar.gz  275MB
-
-    vzdump: |
-      starting backup...
-      backup successful
-
-    pvesm scan: |
-      scanning storage...
+versions:
+  7:
+    "pvesm scan local": |
+      scanning storage 'local'...
       scan complete
 
-    pvesm prune-backups: |
-      pruning old backups...
-      pruning successful
+  8:
+    "pvesm scan local": |
+      scanning storage 'local'...
+      scan complete
+    
+    "pvesm prune-backups local --keep-last 5": |
+      pruning old backups on 'local', keeping last 5...
+      pruning successful, removed 3 old backups
