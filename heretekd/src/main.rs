@@ -6,6 +6,7 @@ use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use std::sync::Arc;
+use std::env;
 
 fn is_proxmox() -> bool {
     Path::new("/etc/pve").exists()
@@ -20,8 +21,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(&bind_address).await?;
     println!("heretekd: SSH mock luistert op {bind_address} (om te stoppen: gebruik Ctrl+C of kill <PID>)");
     
-    // Lees optionele versie uit configuratie of gebruik standaard (V8)
-    let version = if let Some(ver_str) = cfg.proxmox.version.as_deref() {
+    // Lees versie uit command line arguments, anders uit configuratie
+    let args: Vec<String> = env::args().collect();
+    let cmd_version = args.iter().position(|arg| arg == "--version" || arg == "-v")
+        .and_then(|i| args.get(i + 1))
+        .map(|v| v.as_str());
+    
+    let version = if let Some(ver_str) = cmd_version {
+        match ver_str {
+            "6" => ProxmoxVersion::V6,
+            "7" => ProxmoxVersion::V7,
+            "8" => ProxmoxVersion::V8,
+            _ => {
+                eprintln!("⚠️ Ongeldige versie: {}. Geldige waarden zijn 6, 7 of 8.", ver_str);
+                return Ok(());
+            }
+        }
+    } else if let Some(ver_str) = cfg.proxmox.version.as_deref() {
         match ver_str {
             "6" => ProxmoxVersion::V6,
             "7" => ProxmoxVersion::V7,
@@ -32,6 +48,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
     
     println!("heretekd: Proxmox VE {:?} wordt gesimuleerd (om te stoppen: gebruik Ctrl+C of kill <PID>)", version);
+    println!("heretekd: Gebruik '--version 6/7/8' om een specifieke versie te simuleren");
     
     // Initialiseer MockServer één keer en hergebruik deze
     let mock: Arc<MockServer> = Arc::new(MockServer::with_version(version));
