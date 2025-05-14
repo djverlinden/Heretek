@@ -1,0 +1,93 @@
+use chrono::Local;
+use config::load_config;
+use heretekd::{MockServer, mockup::ProxmoxVersion};
+use std::error::Error;
+use std::path::Path;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
+
+fn is_proxmox() -> bool {
+    Path::new("/etc/pve").exists()
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let cfg = load_config();
+    let bind_address = format!("{}:{}", cfg.heretekd.host, cfg.heretekd.port);
+    let ctl_address = format!("{}:{}", cfg.heretekctl.host, cfg.heretekctl.port);
+
+    let listener = TcpListener::bind(&bind_address).await?;
+    println!("heretekd: SSH mock luistert op {bind_address}");
+
+    loop {
+        let (mut socket, _addr) = listener.accept().await?;
+        let ctl_address = ctl_address.clone();
+        // Lees optionele versie uit configuratie of gebruik standaard (V8)
+        let version = if let Some(ver_str) = cfg.proxmox.version.as_deref() {
+            match ver_str {
+                "6" => ProxmoxVersion::V6,
+                "7" => ProxmoxVersion::V7,
+                _ => ProxmoxVersion::V8,
+            }
+        } else {
+            ProxmoxVersion::V8
+        };
+        
+        let mock = MockServer::with_version(version);
+        println!("Proxmox MockServer gestart met versie {:?}", version);
+
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(&mut socket);
+            let mut line = String::new();
+
+            match reader.read_line(&mut line).await {
+                Ok(0) => {
+                    println!("❌ Lege invoer");
+                    return;
+                }
+                Ok(_) => {
+                    let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+                    println!("[{ts}] 📩 Ontvangen van SSH-client: {line}");
+                }
+                Err(e) => {
+                    eprintln!("❌ Leesfout: {e}");
+                    return;
+                }
+            }
+
+            if is_proxmox() {
+                match TcpStream::connect(&ctl_address).await {
+                    Ok(mut ctl_stream) => {
+                        if ctl_stream.write_all(line.as_bytes()).await.is_err() {
+                            eprintln!("❌ Versturen naar heretekctl mislukt");
+                            return;
+                        }
+
+                        let mut ctl_reader = BufReader::new(&mut ctl_stream);
+                        let mut response = String::new();
+                        if ctl_reader.read_line(&mut response).await.is_ok() {
+                            println!("🔁 Antwoord van ctl: {response}");
+                            if let Err(e) = socket.write_all(response.as_bytes()).await {
+                                eprintln!("❌ Fout bij versturen antwoord naar client: {e}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Kan heretekctl niet bereiken: {e}");
+                        if let Err(e) = socket
+                            .write_all(b"[heretekd] heretekctl onbereikbaar\n")
+                            .await {
+                                eprintln!("❌ Fout bij versturen foutmelding naar client: {e}");
+                        }
+                    }
+                }
+            } else {
+                println!("⚠️ Proxmox niet gevonden, gebruik mockserver");
+                let response = mock.handle_command(&line);
+                if let Err(e) = socket.write_all(response.as_bytes()).await {
+                    eprintln!("❌ Fout bij versturen mock-antwoord naar client: {e}");
+                }
+            }
+        });
+    }
+}

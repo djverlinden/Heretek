@@ -1,0 +1,1 @@
+/Users/dj/[03]\ Werk/[01]\ Projecten/Proxmox/heretek/target/debug/heretekctl: /Users/dj/[03]\ Werk/[01]\ Projecten/Proxmox/heretek/config/src/lib.rs /Users/dj/[03]\ Werk/[01]\ Projecten/Proxmox/heretek/heretekctl/src/main.rs

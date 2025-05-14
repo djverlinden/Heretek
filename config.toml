@@ -1,0 +1,11 @@
+[heretekd]
+host = "127.0.0.1"
+port = 2222
+
+[heretekctl]
+host = "127.0.0.1"
+port = 9001
+
+[proxmox]
+# Versie van Proxmox die gesimuleerd wordt (6, 7, of 8)
+version = "8"
