@@ -1,12 +1,12 @@
 use chrono::Local;
 use heretek_config::load_config;
 use heretekd::{MockServer, ProxmoxVersion};
+use std::env;
 use std::error::Error;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use std::sync::Arc;
-use std::env;
 
 fn is_proxmox() -> bool {
     Path::new("/etc/pve").exists()
@@ -20,20 +20,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let listener = TcpListener::bind(&bind_address).await?;
     println!("heretekd: SSH mock luistert op {bind_address} (om te stoppen: gebruik Ctrl+C of kill <PID>)");
-    
+
     // Lees versie uit command line arguments, anders uit configuratie
     let args: Vec<String> = env::args().collect();
-    let cmd_version = args.iter().position(|arg| arg == "--version" || arg == "-v")
+    let cmd_version = args
+        .iter()
+        .position(|arg| arg == "--version" || arg == "-v")
         .and_then(|i| args.get(i + 1))
         .map(|v| v.as_str());
-    
+
     let version = if let Some(ver_str) = cmd_version {
         match ver_str {
             "6" => ProxmoxVersion::V6,
             "7" => ProxmoxVersion::V7,
             "8" => ProxmoxVersion::V8,
             _ => {
-                eprintln!("⚠️ Ongeldige versie: {}. Geldige waarden zijn 6, 7 of 8.", ver_str);
+                eprintln!(
+                    "⚠️ Ongeldige versie: {}. Geldige waarden zijn 6, 7 of 8.",
+                    ver_str
+                );
                 return Ok(());
             }
         }
@@ -46,13 +51,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     } else {
         ProxmoxVersion::V8
     };
-    
-    println!("heretekd: Proxmox VE {:?} wordt gesimuleerd (om te stoppen: gebruik Ctrl+C of kill <PID>)", version);
+
+    println!(
+        "heretekd: Proxmox VE {:?} wordt gesimuleerd (om te stoppen: gebruik Ctrl+C of kill <PID>)",
+        version
+    );
     println!("heretekd: Gebruik '--version 6/7/8' om een specifieke versie te simuleren");
-    
+    println!(
+        "heretekd: Gebruik 'heretek-setversion 6/7/8' om de versie tijdens runtime te wijzigen"
+    );
+
     // Initialiseer MockServer één keer en hergebruik deze
-    let mock: Arc<MockServer> = Arc::new(MockServer::with_version(version));
-    println!("Configuratie eenmalig geladen voor MockServer");
+    let mock: Arc<Mutex<MockServer>> = Arc::new(Mutex::new(MockServer::with_version(version)));
+    println!("✅ Proxmox simulator gereed met versie {:?}", version);
 
     loop {
         let (mut socket, _addr) = listener.accept().await?;
@@ -100,14 +111,57 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         eprintln!("❌ Kan heretekctl niet bereiken: {e}");
                         if let Err(e) = socket
                             .write_all(b"[heretekd] heretekctl onbereikbaar\n")
-                            .await {
-                                eprintln!("❌ Fout bij versturen foutmelding naar client: {e}");
+                            .await
+                        {
+                            eprintln!("❌ Fout bij versturen foutmelding naar client: {e}");
                         }
                     }
                 }
             } else {
-                println!("⚠️ Proxmox niet gevonden, gebruik gecachte mockserver");
-                let response = mock.handle_command(&line);
+                // Controleer en verwerk speciale heretek-commando's
+                let response = if line.trim().starts_with("heretek-setversion ") {
+                    // Extract versie nummer uit het commando
+                    let ver_str = line.trim().split_whitespace().nth(1).unwrap_or("invalid");
+                    let response = match ver_str {
+                        "6" => {
+                            if let Ok(mut server) = mock.lock() {
+                                server.set_version(ProxmoxVersion::V6);
+                                format!("✅ Proxmox versie succesvol gewijzigd naar V6\n")
+                            } else {
+                                "❌ Kon server niet vergrendelen om versie te wijzigen\n"
+                                    .to_string()
+                            }
+                        }
+                        "7" => {
+                            if let Ok(mut server) = mock.lock() {
+                                server.set_version(ProxmoxVersion::V7);
+                                format!("✅ Proxmox versie succesvol gewijzigd naar V7\n")
+                            } else {
+                                "❌ Kon server niet vergrendelen om versie te wijzigen\n"
+                                    .to_string()
+                            }
+                        }
+                        "8" => {
+                            if let Ok(mut server) = mock.lock() {
+                                server.set_version(ProxmoxVersion::V8);
+                                format!("✅ Proxmox versie succesvol gewijzigd naar V8\n")
+                            } else {
+                                "❌ Kon server niet vergrendelen om versie te wijzigen\n"
+                                    .to_string()
+                            }
+                        }
+                        _ => format!("❌ Ongeldige versie: {}. Gebruik 6, 7 of 8.\n", ver_str),
+                    };
+                    response
+                } else {
+                    // Normale commando's verwerken
+                    if let Ok(server) = mock.lock() {
+                        server.handle_command(&line)
+                    } else {
+                        "❌ Kon server niet vergrendelen om commando te verwerken\n".to_string()
+                    }
+                };
+
                 if let Err(e) = socket.write_all(response.as_bytes()).await {
                     eprintln!("❌ Fout bij versturen mock-antwoord naar client: {e}");
                 }

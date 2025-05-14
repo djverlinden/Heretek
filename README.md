@@ -106,6 +106,10 @@ COMMAND="pct list"
 echo "🔧 Verstuur commando: '$COMMAND' naar $HOST:$PORT"
 echo "$COMMAND" | nc "$HOST" "$PORT"
 echo "✅ Command verzonden"
+
+# Voorbeeld om de Proxmox versie te wijzigen:
+# RESPONSE=$(echo "heretek-setversion 7" | nc "$HOST" "$PORT")
+# echo "Versie gewijzigd: $RESPONSE"
 ```
 
 ## 🧪 Testen
@@ -160,13 +164,35 @@ Heretek ondersteunt het simuleren van drie Proxmox VE versies:
 - **Proxmox VE 7.x** - Uitgebreidere functionaliteit met meer commando-ondersteuning
 - **Proxmox VE 8.x** - Alle geïmplementeerde functionaliteit beschikbaar (standaard)
 
-Om de versie te wijzigen, pas je de `version` waarde aan in het `config.toml` bestand.
+Je kunt de versie op verschillende manieren wijzigen:
+
+1. Via het `config.toml` bestand (permanent):
+   ```toml
+   [proxmox]
+   version = "7"  # Verander naar 6, 7 of 8
+   ```
+
+2. Via een commando vanuit een extern programma (bijvoorbeeld in een bash script):
+   ```bash
+   # Wijzig naar Proxmox versie 7
+   echo "heretek-setversion 7" | nc "$HOST" "$PORT"
+   
+   # Controleer huidige versie
+   echo "pveversion" | nc "$HOST" "$PORT"
+   ```
 
 ## 👨‍💻 Voor wie?
 
 - Infra-architecten
 - Systeembeheerders die lokaal willen testen
 - Developers die willen mocken zonder side-effects op echte servers
+
+## 📝 Beschikbare speciale commando's
+
+Naast reguliere Proxmox commando's, ondersteunt Heretek ook speciale commando's:
+
+- `pveversion` - Toont informatie over de huidige gesimuleerde Proxmox-versie
+- `heretek-setversion <versie>` - Wijzigt de actieve Proxmox-versie (6, 7 of 8)
 
 ⸻
 
