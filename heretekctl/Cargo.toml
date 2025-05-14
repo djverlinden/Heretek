@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
-config = { path = "../config" }
+heretek_config = { path = "../config" }

@@ -1,0 +1,75 @@
+# Gemeenschappelijke commando configuratie voor Proxmox
+#
+# Dit bestand definieert algemene commando's die in alle Proxmox versies werken
+
+"apt update": |
+  Hit:1 http://security.debian.org bullseye-security InRelease
+  Hit:2 http://ftp.debian.org/debian bullseye InRelease
+  Hit:3 http://ftp.debian.org/debian bullseye-updates InRelease
+  Hit:4 http://download.proxmox.com/debian/pve bullseye InRelease
+  Reading package lists... Done
+  Building dependency tree... Done
+  Reading state information... Done
+  All packages are up to date.
+
+"apt upgrade": |
+  Reading package lists... Done
+  Building dependency tree... Done
+  Reading state information... Done
+  Calculating upgrade... Done
+  0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+
+"hostname": |
+  proxmox
+
+"hostname -f": |
+  proxmox.example.com
+
+"uname -a": |
+  Linux proxmox 6.2.16-3-pve #1 SMP PREEMPT_DYNAMIC PMX 6.2.16-3 (2023-09-12T14:00Z) x86_64 GNU/Linux
+
+"systemctl status pvedaemon": |
+  ● pvedaemon.service - PVE API Daemon
+       Loaded: loaded (/lib/systemd/system/pvedaemon.service; enabled; vendor preset: enabled)
+       Active: active (running) since Tue 2023-10-17 15:23:25 CEST; 2h 35min ago
+         Docs: man:pvedaemon(8)
+      Process: 1234 ExecStart=/usr/bin/pvedaemon start (code=exited, status=0/SUCCESS)
+     Main PID: 1357 (pvedaemon)
+        Tasks: 6 (limit: 4915)
+       Memory: 81.7M
+          CPU: 12.334s
+       CGroup: /system.slice/pvedaemon.service
+               └─1357 pvedaemon worker
+
+"df -h": |
+  Filesystem      Size  Used Avail Use% Mounted on
+  /dev/sda1       458G   25G  433G   6% /
+  /dev/sdb1       916G  125G  791G  14% /mnt/data
+  tmpfs           7.7G     0  7.7G   0% /dev/shm
+
+"free -h": |
+  total         used        free      shared  buff/cache   available
+  Mem:           15Gi       2.1Gi       7.3Gi       0.0Ki       5.6Gi        12Gi
+  Swap:          4.0Gi       0.0Ki       4.0Gi
+
+"uptime": |
+  15:23:42 up 23 days, 4:12, 1 user, load average: 0.15, 0.19, 0.14
+
+"cat /etc/hosts": |
+  127.0.0.1       localhost
+  192.168.1.100   proxmox.example.com proxmox
+
+  # The following lines are desirable for IPv6 capable hosts
+  ::1     localhost ip6-localhost ip6-loopback
+  ff02::1 ip6-allnodes
+  ff02::2 ip6-allrouters
+
+"ping -c 3 8.8.8.8": |
+  PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+  64 bytes from 8.8.8.8: icmp_seq=1 ttl=113 time=13.6 ms
+  64 bytes from 8.8.8.8: icmp_seq=2 ttl=113 time=13.5 ms
+  64 bytes from 8.8.8.8: icmp_seq=3 ttl=113 time=13.7 ms
+
+  --- 8.8.8.8 ping statistics ---
+  3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+  rtt min/avg/max/mdev = 13.489/13.582/13.675/0.076 ms

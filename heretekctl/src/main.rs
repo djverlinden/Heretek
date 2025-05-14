@@ -1,5 +1,5 @@
 use chrono::Local;
-use config::load_config;
+use heretek_config::load_config;
 use std::error::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -150,7 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let bind_address = format!("{}:{}", cfg.heretekctl.host, cfg.heretekctl.port);
 
     let listener = TcpListener::bind(&bind_address).await?;
-    log(EMOJI_BRAIN, &format!("heretekctl luistert op {bind_address}"));
+    log(EMOJI_BRAIN, &format!("heretekctl luistert op {bind_address} (om te stoppen: gebruik Ctrl+C of kill <PID>)"));
 
     loop {
         match listener.accept().await {

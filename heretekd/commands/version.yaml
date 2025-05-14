@@ -1,0 +1,94 @@
+common_commands:
+  pveversion: |
+    pve-manager/8.0.4/a3df58f2 (running kernel: 6.2.16-3-pve)
+
+  pveversion -v: |
+    proxmox-ve: 8.0-2 (running kernel: 6.2.16-3-pve)
+    pve-manager: 8.0.4 (running version: 8.0.4/a3df58f2)
+    pve-kernel-6.2: 6.2.16-3
+    ceph-fuse: 18.2.0-pve1
+    corosync: 3.1.7-pve2
+    criu: 3.18-1
+    glusterfs-client: 11.0-1
+    ifupdown2: 3.1.0-1+pve7
+    libjs-extjs: 7.3.1-1
+    libknet1: 1.28-pve1
+    libproxmox-backup-qemu0: 3.0.3-1
+    libpve-access-control: 8.0.3
+    libpve-apiclient-perl: 3.5-1
+    libpve-common-perl: 8.0.2
+    libpve-guest-common-perl: 5.0.1
+    libpve-http-server-perl: 4.0.1
+    libpve-storage-perl: 8.0.3
+    libspice-server1: 0.15.1-1
+    lvm2: 2.03.19-pve1
+    lxc-pve: 5.0.3-1
+    lxcfs: 5.0.4-pve1
+    novnc-pve: 1.4.0-2
+    proxmox-backup-client: 3.0.3-1
+    proxmox-backup-file-restore: 3.0.3-1
+    proxmox-mini-journalreader: 1.5-1
+    proxmox-widget-toolkit: 4.0.2
+    pve-cluster: 8.0.2
+    pve-container: 5.0.2
+    pve-docs: 8.0.2
+    pve-edk2-firmware: 3.20230228-1
+    pve-firewall: 5.0.2
+    pve-firmware: 4.0.1
+    pve-ha-manager: 4.0.1
+    pve-i18n: 3.0.1
+    pve-qemu-kvm: 8.0.2
+    pve-xtermjs: 4.16.0-2
+    qemu-server: 8.0.3
+    smartmontools: 7.3-pve3
+    spiceterm: 4.0.1
+    vncterm: 2.0.1
+    zfsutils-linux: 2.1.15-pve1
+
+version_commands:
+  "8":
+    pveversion: |
+      pve-manager/8.0.4/a3df58f2 (running kernel: 6.2.16-3-pve)
+
+    pveversion -v: |
+      proxmox-ve: 8.0-2 (running kernel: 6.2.16-3-pve)
+      pve-manager: 8.0.4 (running version: 8.0.4/a3df58f2)
+      pve-kernel-6.2: 6.2.16-3
+      ceph-fuse: 18.2.0-pve1
+      corosync: 3.1.7-pve2
+      criu: 3.18-1
+      glusterfs-client: 11.0-1
+      ifupdown2: 3.1.0-1+pve7
+      libjs-extjs: 7.3.1-1
+      libknet1: 1.28-pve1
+      libproxmox-backup-qemu0: 3.0.3-1
+      libpve-access-control: 8.0.3
+      libpve-apiclient-perl: 3.5-1
+      libpve-common-perl: 8.0.2
+      libpve-guest-common-perl: 5.0.1
+      libpve-http-server-perl: 4.0.1
+      libpve-storage-perl: 8.0.3
+      libspice-server1: 0.15.1-1
+      lvm2: 2.03.19-pve1
+      lxc-pve: 5.0.3-1
+      lxcfs: 5.0.4-pve1
+      novnc-pve: 1.4.0-2
+      proxmox-backup-client: 3.0.3-1
+      proxmox-backup-file-restore: 3.0.3-1
+      proxmox-mini-journalreader: 1.5-1
+      proxmox-widget-toolkit: 4.0.2
+      pve-cluster: 8.0.2
+      pve-container: 5.0.2
+      pve-docs: 8.0.2
+      pve-edk2-firmware: 3.20230228-1
+      pve-firewall: 5.0.2
+      pve-firmware: 4.0.1
+      pve-ha-manager: 4.0.1
+      pve-i18n: 3.0.1
+      pve-qemu-kvm: 8.0.2
+      pve-xtermjs: 4.16.0-2
+      qemu-server: 8.0.3
+      smartmontools: 7.3-pve3
+      spiceterm: 4.0.1
+      vncterm: 2.0.1
+      zfsutils-linux: 2.1.15-pve1

@@ -1,10 +1,11 @@
 use chrono::Local;
-use config::load_config;
-use heretekd::{MockServer, mockup::ProxmoxVersion};
+use heretek_config::load_config;
+use heretekd::{MockServer, ProxmoxVersion};
 use std::error::Error;
 use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
+use std::sync::Arc;
 
 fn is_proxmox() -> bool {
     Path::new("/etc/pve").exists()
@@ -17,24 +18,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let ctl_address = format!("{}:{}", cfg.heretekctl.host, cfg.heretekctl.port);
 
     let listener = TcpListener::bind(&bind_address).await?;
-    println!("heretekd: SSH mock luistert op {bind_address}");
+    println!("heretekd: SSH mock luistert op {bind_address} (om te stoppen: gebruik Ctrl+C of kill <PID>)");
+    
+    // Lees optionele versie uit configuratie of gebruik standaard (V8)
+    let version = if let Some(ver_str) = cfg.proxmox.version.as_deref() {
+        match ver_str {
+            "6" => ProxmoxVersion::V6,
+            "7" => ProxmoxVersion::V7,
+            _ => ProxmoxVersion::V8,
+        }
+    } else {
+        ProxmoxVersion::V8
+    };
+    
+    println!("heretekd: Proxmox VE {:?} wordt gesimuleerd (om te stoppen: gebruik Ctrl+C of kill <PID>)", version);
+    
+    // Initialiseer MockServer één keer en hergebruik deze
+    let mock: Arc<MockServer> = Arc::new(MockServer::with_version(version));
+    println!("Configuratie eenmalig geladen voor MockServer");
 
     loop {
         let (mut socket, _addr) = listener.accept().await?;
         let ctl_address = ctl_address.clone();
-        // Lees optionele versie uit configuratie of gebruik standaard (V8)
-        let version = if let Some(ver_str) = cfg.proxmox.version.as_deref() {
-            match ver_str {
-                "6" => ProxmoxVersion::V6,
-                "7" => ProxmoxVersion::V7,
-                _ => ProxmoxVersion::V8,
-            }
-        } else {
-            ProxmoxVersion::V8
-        };
-        
-        let mock = MockServer::with_version(version);
-        println!("Proxmox MockServer gestart met versie {:?}", version);
+        // Deel de MockServer instantie met de task
+        let mock = Arc::clone(&mock);
 
         tokio::spawn(async move {
             let mut reader = BufReader::new(&mut socket);
@@ -82,7 +89,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
             } else {
-                println!("⚠️ Proxmox niet gevonden, gebruik mockserver");
+                println!("⚠️ Proxmox niet gevonden, gebruik gecachte mockserver");
                 let response = mock.handle_command(&line);
                 if let Err(e) = socket.write_all(response.as_bytes()).await {
                     eprintln!("❌ Fout bij versturen mock-antwoord naar client: {e}");

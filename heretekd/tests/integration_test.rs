@@ -1,14 +1,41 @@
-use heretekd::mockup::MockServer;
+use heretekd::{MockServer, ProxmoxVersion};
 use std::net::TcpStream;
 use std::io::{Read, Write};
 use std::thread;
 use std::time::Duration;
 use std::path::Path;
 use std::env;
-use config::load_config;
+use std::fs;
+use heretek_config::load_config;
 
-// Opmerking: Deze test veronderstelt dat de server lokaal draait op een specifieke poort
-// Voor een echte integratie test zou je een test-specifieke server instance moeten opstarten
+// Zorgt ervoor dat de test directory de benodigde configuratie heeft
+fn setup_test_config() {
+    // Zorg dat we in de heretekd directory zijn
+    let test_dir = env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    
+    // Maak de commands directory aan en verplaats de yaml bestanden
+    let commands_dir = test_dir.join("config").join("commands");
+    if !commands_dir.exists() {
+        fs::create_dir_all(&commands_dir).expect("Kon commands directory niet aanmaken");
+    }
+    
+    // Kopieer test configuraties van tests/commands naar config/commands
+    let test_commands_dir = test_dir.join("tests").join("commands");
+    if test_commands_dir.exists() {
+        for entry in fs::read_dir(&test_commands_dir).expect("Kon test commands directory niet lezen") {
+            if let Ok(entry) = entry {
+                let source = entry.path();
+                if source.extension().map_or(false, |ext| ext == "yaml") {
+                    let dest = commands_dir.join(source.file_name().unwrap());
+                    fs::copy(&source, &dest).expect("Kon configuratiebestand niet kopiëren");
+                }
+            }
+        }
+    }
+    
+    println!("Test config directory aangemaakt en configuraties gekopieerd: {:?}", commands_dir);
+    
+}
 
 #[test]
 #[ignore] // Toevoegen om te voorkomen dat deze test standaard wordt uitgevoerd
@@ -64,15 +91,31 @@ fn test_config_loading() {
 // Test de MockServer direct
 #[test]
 fn test_mock_server_directly() {
+    // Zorg dat de test configuratie klaar staat
+    setup_test_config();
+    
+    // Maak een mock server en test verschillende versies
     let mock = MockServer::new();
     
-    // Test een paar commando's
+    // Test zfs commando (moet altijd werken door fallback)
     let zfs_response = mock.handle_command("zfs list");
-    assert!(zfs_response.contains("rpool"));
+    assert!(zfs_response.contains("rpool"), "zfs_response: {}", zfs_response);
+    assert!(zfs_response.contains("USED"), "zfs_response: {}", zfs_response);
     
+    // Test container commando
     let pct_response = mock.handle_command("pct list");
-    assert!(pct_response.contains("test-container"));
+    assert!(pct_response.contains("test-container"), "pct_response: {}", pct_response);
     
+    // Test onbekend commando
     let unknown_response = mock.handle_command("onbekend");
-    assert!(unknown_response.contains("onbekend commando"));
+    assert!(unknown_response.contains("onbekend commando"), "unknown_response: {}", unknown_response);
+    
+    // Test versie-specifieke functionaliteit
+    let v6_mock = MockServer::with_version(ProxmoxVersion::V6);
+    let v6_response = v6_mock.handle_command("qm clone 200 203");
+    assert!(v6_response.contains("niet beschikbaar"), "v6_response: {}", v6_response);
+    
+    let v8_mock = MockServer::with_version(ProxmoxVersion::V8);
+    let v8_response = v8_mock.handle_command("pveversion");
+    assert!(v8_response.contains("8.0"), "v8_response: {}", v8_response);
 }

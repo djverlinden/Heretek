@@ -5,12 +5,27 @@ PORT="2222"
 # Optionele Proxmox versie instellen (6, 7, 8)
 PROXMOX_VERSION=${1:-"8"}
 
+# Statistieken bijhouden
+TOTAL_COMMANDS=0
+ERROR_COMMANDS=0
+SUCCESS_COMMANDS=0
+
 # Functie om een commando te versturen en het resultaat te tonen
 send_command() {
     local cmd="$1"
     echo "🔧 Verstuur commando: '$cmd' naar $HOST:$PORT"
-    echo "$cmd" | nc "$HOST" "$PORT"
-    echo "✅ Command verzonden"
+    TOTAL_COMMANDS=$((TOTAL_COMMANDS + 1))
+    RESPONSE=$(echo "$cmd" | nc "$HOST" "$PORT")
+    echo "$RESPONSE"
+    
+    # Controleer of er een fout in de respons zit
+    if echo "$RESPONSE" | grep -q "ERROR"; then
+        ERROR_COMMANDS=$((ERROR_COMMANDS + 1))
+        echo "❌ Command resulteerde in fout"
+    else
+        SUCCESS_COMMANDS=$((SUCCESS_COMMANDS + 1))
+        echo "✅ Command succesvol"
+    fi
     echo "------------------------"
 }
 
@@ -104,3 +119,11 @@ if [ "$PROXMOX_VERSION" = "6" ]; then
 fi
 
 echo "✅ Alle tests voltooid voor Proxmox VE $PROXMOX_VERSION"
+echo ""
+echo "📊 TESTRESULTATEN SAMENVATTING:"
+echo "------------------------"
+echo "🔢 Totaal aantal commando's: $TOTAL_COMMANDS"
+echo "✅ Succesvolle commando's: $SUCCESS_COMMANDS"
+echo "❌ Commando's met fouten: $ERROR_COMMANDS"
+echo "📈 Succespercentage: $(( (SUCCESS_COMMANDS * 100) / TOTAL_COMMANDS ))%"
+echo "------------------------"

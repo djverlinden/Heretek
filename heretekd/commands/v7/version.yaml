@@ -1,0 +1,48 @@
+# Version commando's voor Proxmox 7
+#
+# Dit bestand bevat de versie-specifieke commando's en informatie
+
+"pveversion": |
+  pve-manager/7.4-3/09ced5c1 (running kernel: 5.15.102-1-pve)
+"pveversion -v": |
+  proxmox-ve: 7.4-1 (running kernel: 5.15.102-1-pve)
+  pve-manager: 7.4-3 (running version: 7.4-3/09ced5c1)
+  pve-kernel-5.15: 5.15.102-1
+  ceph-fuse: 17.2.6-pve1
+  corosync: 3.1.7-pve1
+  criu: 3.17.1-1
+  glusterfs-client: 10.2-1
+  ifupdown2: 3.1.0-1+pve5
+  libjs-extjs: 7.0.0-3
+  libknet1: 1.24-pve2
+  libproxmox-backup-qemu0: 2.4.1-1
+  libpve-access-control: 7.4-2
+  libpve-apiclient-perl: 3.4-1
+  libpve-common-perl: 7.4-5
+  libpve-guest-common-perl: 4.2-3
+  libpve-http-server-perl: 3.6-2
+  libpve-storage-perl: 7.4-3
+  libspice-server1: 0.14.3-4
+  lvm2: 2.03.16-pve1
+  lxc-pve: 5.0.2-1
+  lxcfs: 5.0.3-pve2
+  novnc-pve: 1.4.0-1
+  proxmox-backup-client: 2.4.1-1
+  proxmox-backup-file-restore: 2.4.1-1
+  proxmox-mini-journalreader: 1.4-1
+  proxmox-widget-toolkit: 3.6-2
+  pve-cluster: 7.3-3
+  pve-container: 4.4-5
+  pve-docs: 7.4-2
+  pve-edk2-firmware: 3.20220526-2
+  pve-firewall: 4.3-3
+  pve-firmware: 3.6-5
+  pve-ha-manager: 3.6-1
+  pve-i18n: 2.6-2
+  pve-qemu-kvm: 7.2.0-16
+  pve-xtermjs: 4.16.0-1
+  qemu-server: 7.4-5
+  smartmontools: 7.3-pve2
+  spiceterm: 3.3-1
+  vncterm: 1.8-1
+  zfsutils-linux: 2.1.12-pve1

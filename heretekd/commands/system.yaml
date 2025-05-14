@@ -1,0 +1,95 @@
+common_commands:
+  ifreload: |
+    reloading network configuration...
+    reload successful
+
+  ip addr: |
+    1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN
+    inet 127.0.0.1/8 scope host lo
+    2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP
+    inet 192.168.1.100/24 brd 192.168.1.255 scope global eth0
+
+  ip route: |
+    default via 192.168.1.1 dev eth0 proto static
+    192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.100
+
+  pvecm status: |
+    Cluster information
+    -------------------
+    Name:             pve-cluster
+    Config Version:   1
+    Transport:        knet
+    Cryptokey:        aes256
+    Redundant rings:  yes
+
+    Nodelist
+    --------
+    Nodeid      Votes Name
+    1               1 node1 (local)
+    2               1 node2
+
+  systemctl status: |
+    ● pve-cluster.service - PVE cluster filesystem
+    Loaded: loaded (/lib/systemd/system/pve-cluster.service; enabled)
+    Active: active (running)
+
+  systemctl restart: |
+    restarting service...
+    restart successful
+
+version_commands:
+  8:
+    pvecm status: |
+      Cluster information
+      -------------------
+      Name:             pve-cluster
+      Config Version:   1
+      Transport:        knet
+      Cryptokey:        aes256
+      Redundant rings:  yes
+
+      Nodelist
+      --------
+      Nodeid      Votes Name
+      1               1 node1 (local)
+      2               1 node2
+
+    pvecm nodes: |
+      Membership information
+      ----------------------
+      Nodeid      Name
+      1           node1 (local)
+      2           node2
+
+    pvecm updatecerts: |
+      updating cluster certificates...
+      certificates successfully updated
+
+    ifreload: |
+      reloading network configuration...
+      reload successful
+
+    ip addr: |
+      1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN
+      inet 127.0.0.1/8 scope host lo
+      2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP
+      inet 192.168.1.100/24 brd 192.168.1.255 scope global eth0
+
+    ip route: |
+      default via 192.168.1.1 dev eth0 proto static
+      192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.100
+
+    systemctl status: |
+      ● pve-cluster.service - PVE cluster filesystem
+      Loaded: loaded (/lib/systemd/system/pve-cluster.service; enabled)
+      Active: active (running)
+
+    systemctl restart: |
+      restarting service...
+      restart successful
+
+    reboot: |
+      System is going down for reboot NOW!
+
+    shutdown: |
+      System is going down for system halt NOW!

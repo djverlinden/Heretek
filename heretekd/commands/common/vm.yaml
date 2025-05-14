@@ -1,0 +1,49 @@
+# VM commando's voor Proxmox (gemeenschappelijk voor alle versies)
+#
+# Dit bestand bevat alle VM-gerelateerde commando's die beschikbaar zijn in alle Proxmox versies
+
+# Basis VM beheer
+"qm list": |
+  VMID       NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID
+  200        debian-vm            running    2048        32            12345
+  201        ubuntu-vm            stopped    4096        64            -
+
+# Start/stop commando's
+"qm start 200": |
+  starting virtual machine 200...
+  started successfully
+"qm start 201": |
+  starting virtual machine 201...
+  started successfully
+"qm stop 200": |
+  stopping virtual machine 200...
+  stopped successfully
+"qm stop 201": |
+  stopping virtual machine 201...
+  stopped successfully
+
+# Creatie en verwijdering
+"qm create 202": |
+  creating virtual machine 202...
+  created successfully
+"qm destroy 202": |
+  destroying virtual machine 202...
+  destroyed successfully
+
+# Snapshot beheer
+"qm snapshot 200 snap1": |
+  creating snapshot snap1 of virtual machine 200...
+  snapshot created successfully
+"qm rollback 200 snap1": |
+  rolling back virtual machine 200 to snapshot snap1...
+  rollback successful
+
+# Migratie
+"qm migrate 200 node2": |
+  migrating virtual machine 200 to node2...
+  migration successful
+
+# Restore
+"qmrestore /var/lib/vz/dump/vzdump-qemu-200.vma.gz 205": |
+  restoring virtual machine 200 to ID 205...
+  restore successful

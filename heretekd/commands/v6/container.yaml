@@ -1,0 +1,47 @@
+# Container commando's voor Proxmox 6
+#
+# Dit bestand bevat alle container-gerelateerde commando's die worden gesimuleerd
+
+# Basis container beheer
+"pct list": |
+  VMID       Status     Name
+  100        running    test-container
+  101        stopped    debian-11
+  102        running    ubuntu-lts
+
+# Start/stop commando's
+"pct start 100": |
+  starting container 100...
+  started successfully
+"pct start 101": |
+  starting container 101...
+  started successfully
+"pct stop 100": |
+  stopping container 100...
+  stopped successfully
+"pct stop 101": |
+  stopping container 101...
+  stopped successfully
+
+# Creatie en verwijdering
+"pct create 103": |
+  creating container 103...
+  created successfully
+"pct destroy 103": |
+  destroying container 103...
+  destroyed successfully
+
+# Snapshot beheer
+"pct snapshot 100 snap1": |
+  creating snapshot snap1 of container 100...
+  snapshot created successfully
+
+# Migratie
+"pct migrate 100 node2": |
+  migrating container 100 to node2...
+  migration successful
+
+# Restore
+"pct restore 105 /var/lib/vz/dump/vzdump-lxc-100.tar.gz": |
+  restoring container 100 to ID 105...
+  restore successful

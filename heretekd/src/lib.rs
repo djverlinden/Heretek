@@ -1,4 +1,7 @@
-pub mod mockup;
+pub mod commands;
+pub mod server;
+pub mod utils;
 
-// Re-export belangrijke componenten
-pub use mockup::MockServer;
+// Exporteer structuren die publiek beschikbaar moeten zijn in de crate
+pub use commands::ProxmoxCommands;
+pub use server::{MockServer, ProxmoxServer, ProxmoxVersion, CommandConfig, CommandLoader, CommandMap};

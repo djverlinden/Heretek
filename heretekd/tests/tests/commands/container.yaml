@@ -1,0 +1,11 @@
+
+common:
+  "pct list": |
+    VMID   NAME             STATUS     MEM(MB)    DISK(GB)  UPTIME
+    100    test-container   running    2048       32.00     1d 4h 35m
+    101    backup-server    stopped    1024       10.00     -
+
+versions:
+  7:
+    "pct rollback 100 snap1": |
+      rollback complete

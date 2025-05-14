@@ -1,0 +1,70 @@
+common_commands:
+  qm list: |
+      VMID       NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID
+      200        debian-vm            running    2048        32            12345
+      201        ubuntu-vm            stopped    4096        64            -
+
+  qm start: |
+      starting virtual machine...
+      started successfully
+
+  qm stop: |
+      stopping virtual machine...
+      stopped successfully
+
+  qm shutdown: |
+      shutting down virtual machine...
+      shutdown complete
+
+  qm reset: |
+      resetting virtual machine...
+      reset complete
+
+  qm create: |
+      creating virtual machine...
+      created successfully
+
+  qm destroy: |
+      destroying virtual machine...
+      destroyed successfully
+
+  qm snapshot: |
+      creating snapshot...
+      snapshot created successfully
+
+  qm rollback: |
+      rolling back virtual machine...
+      rollback successful
+
+version_commands:
+  8:
+    qm clone: |
+      cloning virtual machine...
+      cloning successful
+
+    qm migrate: |
+      migrating virtual machine...
+      migration successful
+
+    qm restore: |
+      restoring virtual machine...
+      restore successful
+
+    qm template: |
+      converting VM to template...
+      conversion successful
+
+    qm monitor: |
+      entering QEMU monitor for VM...
+      (QEMU) 
+
+    qm resize: |
+      resizing disk...
+      resize successful
+
+    qm config: |
+      VM configuration:
+      cores: 2
+      memory: 2048
+      net0: e1000=AA:BB:CC:DD:EE:FF,bridge=vmbr0
+      scsi0: local-lvm:32

@@ -1,0 +1,27 @@
+common:
+  "zfs list": |
+    NAME              USED  AVAIL  REFER  MOUNTPOINT
+    rpool             3.50G   96.5G   384K  /rpool
+    rpool/data        1.20G   95.3G   1.20G  /rpool/data
+    rpool/vm-images   2.30G   94.2G   2.30G  /rpool/vm-images
+
+  "pvesm status": |
+    Name             Type     Status           Total            Used        Available
+    local             dir      active           458.4G          25.4G          433.0G
+    local-lvm         lvm      active           458.4G          25.4G          433.0G
+    local-zfs         zfs      active           458.4G          25.4G          433.0G
+
+versions:
+  7:
+    "pvesm scan local": |
+      scanning storage 'local'...
+      scan complete
+
+  8:
+    "pvesm scan local": |
+      scanning storage 'local'...
+      scan complete
+    
+    "pvesm prune-backups local --keep-last 5": |
+      pruning old backups on 'local', keeping last 5...
+      pruning successful, removed 3 old backups
