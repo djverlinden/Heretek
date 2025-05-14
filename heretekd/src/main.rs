@@ -57,9 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         version
     );
     println!("heretekd: Gebruik '--version 6/7/8' om een specifieke versie te simuleren");
-    println!(
-        "heretekd: Gebruik 'heretek-setversion 6/7/8' om de versie tijdens runtime te wijzigen"
-    );
+    println!("heretekd: Gebruik 'heretek-setversion 6/7/8' om de actieve versie te wijzigen");
 
     // Initialiseer MockServer één keer en hergebruik deze
     let mock: Arc<Mutex<MockServer>> = Arc::new(Mutex::new(MockServer::with_version(version)));
@@ -82,7 +80,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
                 Ok(_) => {
                     let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
-                    println!("[{ts}] 📩 Ontvangen van SSH-client: {line}");
+                    if line.trim().starts_with("heretek-setversion ") {
+                        println!("[{ts}] 🔄 Versiewijzigingsverzoek ontvangen: {line}");
+                    } else {
+                        if let Ok(server) = mock.lock() {
+                            println!("[{ts}] [v{}] 📩 Commando ontvangen: {line}", server.get_version().as_number());
+                        } else {
+                            println!("[{ts}] 📩 Commando ontvangen: {line}");
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ Leesfout: {e}");
@@ -126,7 +132,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "6" => {
                             if let Ok(mut server) = mock.lock() {
                                 server.set_version(ProxmoxVersion::V6);
-                                format!("✅ Proxmox versie succesvol gewijzigd naar V6\n")
+                                let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+                                println!("[{ts}] [v6] ✅ Versie gewijzigd naar Proxmox 6");
+                                format!("✅ Proxmox versie V6 geactiveerd\nAlle volgende commando's worden nu uitgevoerd in Proxmox versie 6\n")
                             } else {
                                 "❌ Kon server niet vergrendelen om versie te wijzigen\n"
                                     .to_string()
@@ -135,7 +143,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "7" => {
                             if let Ok(mut server) = mock.lock() {
                                 server.set_version(ProxmoxVersion::V7);
-                                format!("✅ Proxmox versie succesvol gewijzigd naar V7\n")
+                                let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+                                println!("[{ts}] [v7] ✅ Versie gewijzigd naar Proxmox 7");
+                                format!("✅ Proxmox versie V7 geactiveerd\nAlle volgende commando's worden nu uitgevoerd in Proxmox versie 7\n")
                             } else {
                                 "❌ Kon server niet vergrendelen om versie te wijzigen\n"
                                     .to_string()
@@ -144,7 +154,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         "8" => {
                             if let Ok(mut server) = mock.lock() {
                                 server.set_version(ProxmoxVersion::V8);
-                                format!("✅ Proxmox versie succesvol gewijzigd naar V8\n")
+                                let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+                                println!("[{ts}] [v8] ✅ Versie gewijzigd naar Proxmox 8");
+                                format!("✅ Proxmox versie V8 geactiveerd\nAlle volgende commando's worden nu uitgevoerd in Proxmox versie 8\n")
                             } else {
                                 "❌ Kon server niet vergrendelen om versie te wijzigen\n"
                                     .to_string()
@@ -156,6 +168,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 } else {
                     // Normale commando's verwerken
                     if let Ok(server) = mock.lock() {
+                        let version = server.get_version();
+                        let ts = Local::now().format("%Y-%m-%d %H:%M:%S");
+                        println!("[{ts}] [v{}] 🔧 Uitvoeren: {}", version.as_number(), line.trim());
                         server.handle_command(&line)
                     } else {
                         "❌ Kon server niet vergrendelen om commando te verwerken\n".to_string()
