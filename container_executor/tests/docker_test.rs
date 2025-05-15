@@ -1,6 +1,5 @@
 use std::process::Command;
 use std::path::PathBuf;
-use std::collections::HashMap;
 use std::time::Duration;
 use std::thread;
 
@@ -27,14 +26,20 @@ fn test_docker_test_creation() {
 #[test]
 fn test_docker_test_with_mount() {
     let path = PathBuf::from("/tmp");
-    let tester = DockerTest::new("test-image").with_mount(path.clone());
-    assert_eq!(tester.mount_path.unwrap(), path);
+    let mut tester = DockerTest::new("test-image");
+    tester.with_mount(path.clone());
+    let has_path = match &tester.mount_path {
+        Some(mp) => mp == &path,
+        None => false
+    };
+    assert!(has_path);
 }
 
 #[test]
 fn test_docker_test_with_work_dir() {
-    let tester = DockerTest::new("test-image").with_work_dir("/app");
-    assert_eq!(tester.work_dir, "/app");
+    let mut tester = DockerTest::new("test-image");
+    tester.with_work_dir("/app");
+    assert_eq!(&tester.work_dir, "/app");
 }
 
 #[test]

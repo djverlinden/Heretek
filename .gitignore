@@ -21,6 +21,7 @@
 *.swp
 *.swo
 .DS_Store
+.DS_Store
 
 # Testbestanden en caches
 config/commands/data/

@@ -1,73 +1,219 @@
-# Container Executor Module for Heretek
+# Container Executor Module voor Heretek
 
-This module provides a simple way to execute bash scripts in containers with Alpine Linux or Proxmox templates via SCP. It is designed to enable isolated execution without affecting the main application.
+Deze module biedt een eenvoudige manier om bash-scripts uit te voeren in containers met Alpine Linux of Proxmox-templates. Het is ontworpen voor geïsoleerde uitvoering zonder de hoofdapplicatie te beïnvloeden.
 
-## Requirements
+## Vereisten
 
-- Docker installed on your system
-- Rust and Cargo
-- sshpass (for password-based SCP)
-- OpenSSH Client (scp and ssh commands)
-- Optional: Proxmox VM templates (.tar.xz format)
+- Docker geïnstalleerd op je systeem
+- Rust en Cargo
+- Docker daemon draaiend
+- Optioneel: Proxmox VM templates (.tar.xz formaat)
 
-## Usage
+## Gebruik
 
-1. Install the required tools:
-   ```
-   # macOS
-   brew install hudochenkov/sshpass/sshpass
-
-   # Ubuntu/Debian
-   apt-get install sshpass
-   ```
-
-2. Build the Docker image:
+1. Installeer een template image:
    ```
    cd container_executor
-   docker build -t heretek-test-alpine .
+   cargo run -- install alpine      # Installeert alpine:latest
+   cargo run -- install debian      # Installeert debian:latest
+   cargo run -- install alpine 3.16 # Installeert specifieke versie
    ```
 
-3. Or use a Proxmox template:
+2. Start een langlopende container:
    ```
-   # Place the Proxmox template file in the container_executor directory
-   # For example: alpine-3.12-default_2020-04-29_amd64.tar.xz
+   # Start een container met standaard instellingen
+   cargo run -- start alpine
    
-   # And run the example
-   cargo run --example use_proxmox_template
+   # Start met poort forwarding
+   cargo run -- start alpine --port 8080:80
+   
+   # Start met custom naam en mount
+   cargo run -- start debian --name mijn-container --mount /pad/naar/data
    ```
 
-4. Run the standard program:
+3. Voer een script uit in een container:
    ```
-   cargo run
+   # Maak een test script
+   echo 'echo "Hello from container"' > test.sh
+   
+   # Voer het uit in een container
+   cargo run -- run test.sh
+   
+   # Met opties
+   cargo run -- run test.sh --mount /pad/naar/data --timeout 30
    ```
 
-## Functionality
+4. Opschonen van Docker resources:
+   ```
+   # Verwijder alleen zwevende images
+   cargo run -- cleanup
+   
+   # Verwijder alle heretek-images
+   cargo run -- cleanup --all
+   
+   # Verwijder ook base images
+   cargo run -- cleanup --all --include-base
+   
+   # Forceer opschonen van draaiende containers
+   cargo run -- cleanup --force
+   
+   # Voor volledig opschonen (inclusief database)
+   ./cleanup.sh
+   ```
 
-- Execute bash scripts in an isolated container environment
-- Support for Proxmox VM templates (Alpine, Debian)
-- Scripts are sent to the container via SCP
-- Container executes scripts via SSH
-- Mount local directories in the container
-- Error handling and logging
-- Timeout mechanism for scripts
+5. Tonen van bijgehouden resources:
+   ```
+   # Toon alle bijgehouden resources
+   cargo run -- list
+   
+   # Toon alleen containers
+   cargo run -- list --containers
+   
+   # Toon alleen images
+   cargo run -- list --images
+   
+   # Toon gedetailleerde informatie
+   cargo run -- list --detailed
+   ```
 
-## Integration
+6. Uitvoeren van tests:
+   ```
+   cargo test
+   # Of voor tests die Docker vereisen:
+   cargo test -- --ignored
+   ```
 
-This module is currently standalone and not yet integrated with the rest of the Heretek project. It can be used as an execution engine for container-based scripts in the Heretek project.
+## Commando-overzicht
 
-## How it works
+### `install` - Installeren van container templates
+```
+cargo run -- install <TEMPLATE> [VERSION]
 
-1. Starts a Docker container with SSH server (standard or from Proxmox template)
-2. Copies your bash script via SCP to the container
-3. Executes the script via SSH in the container
-4. Returns the output
-5. Cleans up the container afterwards
+Argumenten:
+  <TEMPLATE>  Template type (alpine of debian)
+  [VERSION]   Versie van de template, bijv. 3.16 [standaard: latest]
+
+Voorbeelden:
+  cargo run -- install alpine
+  cargo run -- install debian
+  cargo run -- install alpine 3.16
+```
+
+### `start` - Starten van langlopende containers
+```
+cargo run -- start [OPTIES] [TEMPLATE] [VERSION]
+
+Argumenten:
+  [TEMPLATE]  Template type (alpine of debian)
+  [VERSION]   Versie van de template, bijv. 3.16
+
+Opties:
+  -m, --mount <PAD>    Mount een directory in de container
+  -p, --port <MAPPING> Expose ports (format: host:container, bijv. 8080:80)
+  -n, --name <NAAM>    Custom naam voor de container
+
+Voorbeelden:
+  cargo run -- start alpine
+  cargo run -- start debian --port 8080:80
+  cargo run -- start alpine --name mijn-service --mount /pad/naar/data
+```
+
+### `run` - Uitvoeren van scripts in containers
+```
+cargo run -- run [OPTIES] <SCRIPT>
+
+Argumenten:
+  <SCRIPT>    Pad naar het bash script dat uitgevoerd moet worden
+
+Opties:
+  -t, --template <TEMPLATE>  Template om te gebruiken (alpine of debian)
+  -v, --version <VERSION>    Versie van de template, bijv. 3.16
+  -t, --timeout <TIMEOUT>    Optionele timeout in seconden [standaard: 30]
+  -m, --mount <PAD>          Mount een directory in de container
+
+Voorbeelden:
+  cargo run -- run mijn_script.sh
+  cargo run -- run test.sh --timeout 60
+  cargo run -- run deploy.sh --template debian --version 11
+```
+
+### `list` - Tonen van bijgehouden resources
+```
+cargo run -- list [OPTIES]
+
+Opties:
+  -c, --containers  Toon alleen containers
+  -i, --images      Toon alleen images
+  -d, --detailed    Toon gedetailleerde informatie
+
+Voorbeelden:
+  cargo run -- list
+  cargo run -- list --containers
+  cargo run -- list --detailed
+```
+
+### `cleanup` - Opschonen van Docker resources
+```
+cargo run -- cleanup [OPTIES]
+
+Opties:
+  -a, --all           Verwijder alle heretek images, niet alleen zwevende
+      --include-base  Ook base images verwijderen (alpine, debian)
+  -f, --force         Forceer verwijderen van draaiende containers
+
+Voorbeelden:
+  cargo run -- cleanup
+  cargo run -- cleanup --all
+  cargo run -- cleanup --force
+```
+
+## Functionaliteit
+
+- Uitvoeren van bash scripts in een geïsoleerde containeromgeving
+- Ondersteuning voor Proxmox VM templates (Alpine, Debian)
+- Scripts worden uitgevoerd in de container
+- Starten van langlopende containers voor doorlopende taken
+- Mounten van lokale mappen in de container
+- Foutafhandeling en logging
+- Timeout-mechanisme voor scripts
+- DockerTest en DockerService API voor testen
+- Opschonen van Docker resources (containers en images)
+- Automatische tracking van gemaakte resources via een sled database
+- Overzicht van bijgehouden resources via list commando
+- Cleanup script voor volledig opschonen van alle resources
+- Uitgebreide command-line interface met subcommando's
+
+## Integratie
+
+Deze module werkt als een standalone component en kan worden gebruikt als uitvoeringsengine voor containergebaseerde scripts in het Heretek-project.
+
+## Hoe het werkt
+
+1. Start een Docker container (standaard of vanuit Proxmox template)
+2. Registreert de container en images in een lokale sled database
+3. Containers kunnen tijdelijk zijn (voor scripts) of permanent (voor services)
+4. Kopieert je bash script naar de container bij script-uitvoering
+5. Geeft de uitvoer terug bij script-uitvoering
+6. Ruimt tijdelijke containers automatisch op na gebruik
+7. Met het list commando kun je zien welke resources worden bijgehouden
+8. Met het start commando kun je langlopende containers starten
+9. Met het cleanup commando kunnen alle geregistreerde resources worden opgeschoond
+10. Het cleanup.sh script biedt volledige reset van alle resources
 
 ## Proxmox Templates
 
-The module can work directly with Proxmox VM templates:
+De module kan direct werken met Proxmox VM templates:
 
-1. Supported formats: .tar, .tar.gz, .tar.xz
-2. Place your template file in the project directory
-3. Use the `DockerTest::with_proxmox_template()` function
-4. The module will automatically build a Docker image from the template
+1. Ondersteunde formaten: .tar, .tar.gz, .tar.xz
+2. Plaats je template bestand in de project directory
+3. Gebruik de `DockerTest::with_proxmox_template()` functie
+4. De module bouwt automatisch een Docker image van de template
+
+## Test API
+
+De module biedt een API voor het testen van scripts in containers:
+
+1. `DockerTest` - Voor eenmalige script-uitvoering
+2. `DockerService` - Voor het uitvoeren van meerdere scripts in dezelfde container
+3. `ResourceTracker` - Houdt bij welke containers en images zijn aangemaakt in een persistente database
+4. Alle API's hebben timeout-ondersteuning en foutafhandeling ingebouwd

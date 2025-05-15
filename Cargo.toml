@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["heretekd", "heretekctl", "config"]
+members = ["heretekd", "heretekctl", "config", "container_executor"]
 
 # Wijs naar de heretek-config package in de config directory
 [workspace.dependencies]

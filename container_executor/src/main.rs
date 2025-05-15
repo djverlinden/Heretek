@@ -1,412 +1,552 @@
-mod service;
+mod cli;
+mod container;
+mod tracker;
 
-use std::process::{Command, Output};
-use std::fs::{self, File};
-use std::io::{self, Write, Read};
-use std::path::{Path, PathBuf};
+use std::collections::HashSet;
 use std::error::Error;
-use std::collections::HashMap;
-use std::time::Duration;
-use std::env;
+use std::fs::File;
+use std::io::{Read, Write, stdout};
+use std::path::PathBuf;
+use std::process::Command;
 
-pub use service::DockerService;
-
-// Ondersteunde Proxmox template types
-pub enum ProxmoxTemplate {
-    Alpine,
-    Debian,
-    Custom(String),
-}
-
-// De hoofdstructuur voor Docker-tests
-pub struct DockerTest {
-    // De naam van de Docker image die gebruikt wordt
-    image_name: String,
-    // Pad naar de map die gemount wordt in de container
-    mount_path: Option<PathBuf>,
-    // Werkmappad binnen de container
-    work_dir: String,
-    // Proxmox template dat wordt gebruikt
-    template: Option<ProxmoxTemplate>,
-    // Pad naar het template bestand
-    template_path: Option<PathBuf>,
-}
-
-impl DockerTest {
-    // Creeër een nieuwe DockerTest instantie
-    pub fn new(image_name: &str) -> Self {
-        DockerTest {
-            image_name: image_name.to_string(),
-            mount_path: None,
-            work_dir: "/scripts",
-            template: None,
-            template_path: None,
-        }
-    }
-
-    // Creeër een DockerTest instantie met een Proxmox template
-    pub fn with_proxmox_template(template: ProxmoxTemplate, template_path: PathBuf) -> Self {
-        let image_name = match &template {
-            ProxmoxTemplate::Alpine => "proxmox-alpine-test",
-            ProxmoxTemplate::Debian => "proxmox-debian-test",
-            ProxmoxTemplate::Custom(name) => name,
-        };
-        
-        DockerTest {
-            image_name: image_name.to_string(),
-            mount_path: None,
-            work_dir: "/scripts",
-            template: Some(template),
-            template_path: Some(template_path),
-        }
-    }
-
-    // Stel het pad in dat moet worden gemount in de container
-    pub fn with_mount(mut self, mount_path: PathBuf) -> Self {
-        self.mount_path = Some(mount_path);
-        self
-    }
-
-    // Stel de werkmap in de container in
-    pub fn with_work_dir(mut self, work_dir: &str) -> Self {
-        self.work_dir = work_dir.to_string();
-        self
-    }
-
-    // Voer een bash script uit in de container via SCP
-    pub fn run_script(&self, script: &str) -> Result<Output, Box<dyn Error>> {
-        // Schrijf het script naar een tijdelijk bestand
-        let temp_dir = tempfile::tempdir()?;
-        let script_path = temp_dir.path().join("test_script.sh");
-        
-        let mut file = File::create(&script_path)?;
-        writeln!(file, "#!/bin/bash")?;
-        writeln!(file, "set -e")?;
-        writeln!(file, "{}", script)?;
-        file.flush()?;
-        
-        // Maak het script uitvoerbaar
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&script_path)?.permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&script_path, perms)?;
-        }
-        
-        // Start een container in de achtergrond met SSH geïnstalleerd
-        let container_id = {
-            let output = Command::new("docker")
-                .args([
-                    "run", 
-                    "-d",  // detached mode
-                    "--rm",
-                    "-v", &format!("{}:/mnt:ro", self.mount_path.as_ref().map_or("", |p| p.to_str().unwrap_or(""))),
-                    "--entrypoint", "/bin/sh",
-                    &self.image_name,
-                    "-c", "apk add --no-cache openssh-server && \
-                          mkdir -p /run/sshd && \
-                          ssh-keygen -A && \
-                          echo 'root:password' | chpasswd && \
-                          echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
-                          /usr/sbin/sshd && \
-                          tail -f /dev/null"  // keep container running
-                ])
-                .output()?;
-            
-            if !output.status.success() {
-                return Err(format!("Failed to start container: {}", String::from_utf8_lossy(&output.stderr)).into());
-            }
-            
-            String::from_utf8(output.stdout)?.trim().to_string()
-        };
-        
-        // Wacht een moment voor SSH om op te starten
-        std::thread::sleep(Duration::from_secs(2));
-        
-        // Krijg het IP-adres van de container
-        let container_ip = {
-            let output = Command::new("docker")
-                .args(["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", &container_id])
-                .output()?;
-            
-            if !output.status.success() {
-                // Clean up container
-                let _ = Command::new("docker").args(["kill", &container_id]).status();
-                return Err(format!("Failed to get container IP: {}", String::from_utf8_lossy(&output.stderr)).into());
-            }
-            
-            String::from_utf8(output.stdout)?.trim().to_string()
-        };
-        
-        // Kopieer het script naar de container met SCP
-        {
-            // Disable stricthostkeychecking voor dit testgeval
-            let scp_args = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                &script_path.to_string_lossy().to_string(),
-                &format!("root@{}:/tmp/script.sh", container_ip)
-            ];
-            
-            let output = Command::new("scp")
-                .args(scp_args)
-                .env("SSHPASS", "password")
-                .output()?;
-            
-            if !output.status.success() {
-                // Clean up container
-                let _ = Command::new("docker").args(["kill", &container_id]).status();
-                return Err(format!("SCP failed: {}", String::from_utf8_lossy(&output.stderr)).into());
-            }
-        }
-        
-        // Voer het script uit via SSH
-        let output = Command::new("ssh")
-            .args([
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                &format!("root@{}", container_ip),
-                "chmod +x /tmp/script.sh && cd /scripts && /tmp/script.sh"
-            ])
-            .env("SSHPASS", "password")
-            .output()?;
-        
-        // Clean up de container
-        let _ = Command::new("docker").args(["kill", &container_id]).status();
-        
-        Ok(output)
-    }
-    
-    // Controleer of Docker beschikbaar is
-    pub fn is_docker_available() -> bool {
-        Command::new("docker")
-            .arg("--version")
-            .output()
-            .map(|output| output.status.success())
-            .unwrap_or(false)
-    }
-    
-    // Bouw de Docker image als die nog niet bestaat
-    pub fn build_image(&self, dockerfile_path: &Path) -> Result<(), Box<dyn Error>> {
-        // Controleer of de image al bestaat
-        let output = Command::new("docker")
-            .args(&["images", "-q", &self.image_name])
-            .output()?;
-        
-        if !output.stdout.is_empty() {
-            // Image bestaat al
-            return Ok(());
-        }
-        
-        // Als we een Proxmox template gebruiken, maak dan een image op basis daarvan
-        if let Some(template_path) = &self.template_path {
-            return self.build_from_proxmox_template(template_path);
-        }
-        
-        // Standaard image bouwen
-        let status = Command::new("docker")
-            .args(&["build", "-t", &self.image_name, "-f", &dockerfile_path.to_string_lossy(), "."])
-            .current_dir(dockerfile_path.parent().unwrap_or_else(|| Path::new(".")))
-            .status()?;
-        
-        if status.success() {
-            Ok(())
-        } else {
-            Err("Failed to build Docker image".into())
-        }
-    }
-    
-    // Bouw een Docker image van een Proxmox template
-    fn build_from_proxmox_template(&self, template_path: &Path) -> Result<(), Box<dyn Error>> {
-        println!("Building Docker image from Proxmox template: {}", template_path.display());
-        
-        // Tijdelijke map aanmaken voor het bouwen
-        let temp_dir = tempfile::tempdir()?;
-        let rootfs_dir = temp_dir.path().join("rootfs");
-        fs::create_dir_all(&rootfs_dir)?;
-        
-        // Extract het template (afhankelijk van het type)
-        let template_extension = template_path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-        
-        if template_extension == "tar" || template_extension == "gz" || template_extension == "xz" {
-            println!("Extracting template archive...");
-            
-            let extract_cmd = match template_extension {
-                "tar" => Command::new("tar")
-                    .args(&["xf", &template_path.to_string_lossy(), "-C", &rootfs_dir.to_string_lossy()])
-                    .status()?,
-                "gz" => Command::new("tar")
-                    .args(&["xzf", &template_path.to_string_lossy(), "-C", &rootfs_dir.to_string_lossy()])
-                    .status()?,
-                "xz" => Command::new("tar")
-                    .args(&["xJf", &template_path.to_string_lossy(), "-C", &rootfs_dir.to_string_lossy()])
-                    .status()?,
-                _ => return Err(format!("Unsupported template format: {}", template_extension).into()),
-            };
-            
-            if !extract_cmd.success() {
-                return Err(format!("Failed to extract template archive").into());
-            }
-        } else {
-            return Err(format!("Unsupported template format: {}", template_extension).into());
-        }
-        
-        // Maak een minimale Dockerfile aan die de rootfs gebruikt
-        let dockerfile_path = temp_dir.path().join("Dockerfile");
-        let mut dockerfile = File::create(&dockerfile_path)?;
-        
-        writeln!(dockerfile, "FROM scratch")?;
-        writeln!(dockerfile, "ADD rootfs /\n")?;
-        
-        // Voeg de nodige pakketten toe voor SSH (afhankelijk van de template)
-        match &self.template {
-            Some(ProxmoxTemplate::Alpine) => {
-                writeln!(dockerfile, "RUN apk update && \\")?;
-                writeln!(dockerfile, "    apk add --no-cache bash openssh-server openssh-client && \\")?;
-                writeln!(dockerfile, "    mkdir -p /run/sshd && \\")?;
-                writeln!(dockerfile, "    ssh-keygen -A && \\")?;
-                writeln!(dockerfile, "    echo 'root:alpine' | chpasswd && \\")?;
-                writeln!(dockerfile, "    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config")?;
-            },
-            Some(ProxmoxTemplate::Debian) => {
-                writeln!(dockerfile, "RUN apt-get update && \\")?;
-                writeln!(dockerfile, "    apt-get install -y openssh-server openssh-client && \\")?;
-                writeln!(dockerfile, "    mkdir -p /run/sshd && \\")?;
-                writeln!(dockerfile, "    echo 'root:debian' | chpasswd && \\")?;
-                writeln!(dockerfile, "    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config")?;
-            },
-            _ => {
-                // Generieke setup voor andere templates
-                writeln!(dockerfile, "RUN if command -v apt-get; then \\")?;
-                writeln!(dockerfile, "        apt-get update && apt-get install -y openssh-server; \\")?;
-                writeln!(dockerfile, "    elif command -v apk; then \\")?;
-                writeln!(dockerfile, "        apk add --no-cache openssh-server; \\")?;
-                writeln!(dockerfile, "    elif command -v yum; then \\")?;
-                writeln!(dockerfile, "        yum install -y openssh-server; \\")?;
-                writeln!(dockerfile, "    fi && \\")?;
-                writeln!(dockerfile, "    mkdir -p /run/sshd && \\")?;
-                writeln!(dockerfile, "    echo 'root:password' | chpasswd && \\")?;
-                writeln!(dockerfile, "    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config")?;
-            }
-        }
-        
-        writeln!(dockerfile, "\nWORKDIR {}", self.work_dir)?;
-        writeln!(dockerfile, "EXPOSE 22\n")?;
-        writeln!(dockerfile, "CMD [\"/usr/sbin/sshd\", \"-D\"]")?;
-        
-        dockerfile.flush()?;
-        
-        // Bouw de Docker image
-        println!("Building Docker image from Proxmox template...");
-        let build_cmd = Command::new("docker")
-            .args(&["build", "-t", &self.image_name, "-f", &dockerfile_path.to_string_lossy(), "."])
-            .current_dir(temp_dir.path())
-            .status()?;
-        
-        if !build_cmd.success() {
-            return Err("Failed to build Docker image from Proxmox template".into());
-        }
-        
-        println!("Successfully built Docker image {} from Proxmox template", self.image_name);
-        
-        Ok(())
-    }
-}
+use clap::Parser;
+use cli::{Cli, Commands};
+use container::Container;
+use tracker::ResourceTracker;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Controleer of Docker beschikbaar is
-    if !DockerTest::is_docker_available() {
-        eprintln!("Docker is niet beschikbaar. Installeer Docker of start de Docker-daemon.");
-        return Err("Docker niet beschikbaar".into());
+    let cli = Cli::parse();
+
+    if !check_docker()? {
+        return Err("Docker is not available".into());
+    }
+
+    match cli.command {
+        Commands::Install { template, version } => {
+            let image_name = template.get_image_name(&version);
+            build_base_image(&image_name, template.as_str())?;
+            println!("Template installed successfully!");
+            Ok(())
+        },
+        
+        Commands::Cleanup { all, include_base, force } => {
+        cleanup_docker(all, include_base, force)?;
+        Ok(())
+    },
+        
+        Commands::List { containers, images, detailed } => {
+            list_resources(containers, images, detailed)?;
+            Ok(())
+        },
+        
+        Commands::Start { template, version, mount, port, name } => {
+            // Bepaal image naam
+            let image_name = match (template.clone(), version.clone()) {
+                (Some(t), Some(ref v)) => t.get_image_name(v),
+                (Some(t), None) => t.get_image_name("latest"),
+                _ => "heretek-alpine-latest".to_string(),
+            };
+
+            if !image_exists(&image_name)? {
+                println!("Image {} bestaat niet, installeren...", image_name);
+                let template_type = template.map(|t| t.as_str()).unwrap_or("alpine");
+                build_base_image(&image_name, template_type)?;
+            }
+            
+            // Start een langlopende container
+            start_persistent_container(&image_name, mount, port, name)?;
+            Ok(())
+        },
+        
+        Commands::Run { script, template, version, mount, .. } => {
+            if !script.exists() {
+                return Err(format!("Script not found: {}", script.display()).into());
+            }
+            
+            let mut script_content = String::new();
+            File::open(&script)?.read_to_string(&mut script_content)?;
+            
+            let mut image_name = match (template, version) {
+                (Some(t), Some(v)) => t.get_image_name(&v),
+                _ => "heretek-alpine-latest".to_string(),
+            };
+
+            if !image_exists(&image_name)? {
+                let default_image = "heretek-alpine-latest".to_string();
+                build_base_image(&default_image, "alpine")?;
+                image_name = default_image;
+            }
+            
+            let mut container = Container::new(&image_name);
+            if let Some(mount_path) = mount {
+                container.with_mount(mount_path);
+            }
+            
+            // Bijhouden van container in de tracker
+            if let Some(id) = &container.container_id {
+                let mut tracker = ResourceTracker::new();
+                tracker.track_container(id);
+            }
+            
+            println!("Starting container with image: {}", image_name);
+            container.start()?;
+            
+            println!("Executing script: {}", script.display());
+            let output = container.execute_script(&script_content)?;
+            
+            std::io::stdout().write_all(&output.stdout)?;
+            if !output.status.success() {
+                std::io::stderr().write_all(&output.stderr)?;
+                return Err("Script execution failed".into());
+            }
+            
+            Ok(())
+        }
+    }
+}
+
+fn check_docker() -> Result<bool, Box<dyn Error>> {
+    Ok(Command::new("docker")
+        .arg("--version")
+        .status()?
+        .success())
+}
+
+fn image_exists(image_name: &str) -> Result<bool, Box<dyn Error>> {
+    Ok(!Command::new("docker")
+        .args(&["images", "-q", image_name])
+        .output()?
+        .stdout
+        .is_empty())
+}
+
+/// Start een container die blijft draaien (niet automatisch wordt opgeruimd)
+fn start_persistent_container(
+    image_name: &str,
+    mount: Option<PathBuf>,
+    port: Option<String>,
+    name: Option<String>
+) -> Result<(), Box<dyn Error>> {
+    // Maak een persistente container (zonder auto-cleanup)
+    let mut container = container::Container::new_persistent(image_name);
+    
+    // Voeg mount toe indien opgegeven
+    if let Some(ref mount_path) = mount {
+        container.with_mount(mount_path.clone());
     }
     
-    // Voorbeeld van normale Docker image
-    let dockerfile_path = PathBuf::from("container_executor/Dockerfile");
-    let image_name = "heretek-test-alpine";
-    let docker_test = DockerTest::new(image_name);
-    docker_test.build_image(&dockerfile_path)?;
+    // Start de container als een "sleep" process dat blijft draaien
+    println!("Starting persistent container with image: {}", image_name);
+    
+    // Maak een docker run commando
+    let mut cmd = Command::new("docker");
+    cmd.arg("run")
+       .arg("-d") // detached mode
+       .arg("--rm"); // verwijder bij stoppen
+    
+    // Voeg port mapping toe indien opgegeven
+    if let Some(ref port_mapping) = port {
+        cmd.arg("-p").arg(port_mapping);
+    }
+    
+    // Voeg naam toe indien opgegeven
+    if let Some(container_name) = &name {
+        cmd.arg("--name").arg(container_name);
+    }
+    
+    // Voeg mount pad toe indien nodig
+    if let Some(ref mount_path) = mount {
+        cmd.arg("-v")
+           .arg(format!("{}:/mnt:ro", mount_path.display()));
+    }
+    
+    // Werkmap en entrypoint
+    cmd.arg("-w")
+       .arg(&container.work_dir)
+       .arg("--entrypoint").arg("/bin/sh")
+       .arg(&container.image_name)
+       .arg("-c")
+       .arg("while true; do sleep 3600; done"); // Blijf draaien
+       
+    // Voer het commando uit
+    let output = cmd.output()?;
+    
+    if !output.status.success() {
+        return Err(format!(
+            "Failed to start container: {}", 
+            String::from_utf8_lossy(&output.stderr)
+        ).into());
+    }
+    
+    let container_id = String::from_utf8(output.stdout)?.trim().to_string();
+    
+    // Sla container ID op in de container struct
+    container.set_container_id(container_id.clone());
+    
+    // Registreer de container in de tracker
+    let mut tracker = ResourceTracker::new();
+    tracker.track_container(&container_id);
+    
+    // Toon info over de gestarte container
+    println!("✅ Container gestart!");
+    println!("Container ID: {}", container_id);
+    
+    if let Some(container_name) = name {
+        println!("Container naam: {}", container_name);
+    }
+    
+    // Toon hoe de container te benaderen is
+    if let Some(ref port_mapping) = port {
+        let host_port = port_mapping.split(':').next().unwrap_or(port_mapping);
+        println!("Port mapping: {}", port_mapping);
+        println!("Benader via: http://localhost:{}", host_port);
+    }
+    
+    println!("\nJe kunt commando's uitvoeren met:");
+    println!("  docker exec {} <command>", container_id);
+    println!("\nOm te stoppen:");
+    println!("  docker stop {}", container_id);
+    
+    Ok(())
+}
 
-    // Voorbeeld van het gebruik van een Proxmox template (als het bestaat)
-    let proxmox_template_path = PathBuf::from("alpine-3.12-default_2020-04-29_amd64.tar.xz");
-    if proxmox_template_path.exists() {
-        println!("Proxmox template gevonden, bouw een image...");
-        let proxmox_docker_test = DockerTest::with_proxmox_template(
-            ProxmoxTemplate::Alpine, 
-            proxmox_template_path
-        );
-        proxmox_docker_test.build_image(&PathBuf::from("dummy"))?; // Het pad wordt genegeerd voor templates
+fn cleanup_docker(remove_all: bool, include_base: bool, force: bool) -> Result<(), Box<dyn Error>> {
+    println!("🧹 Cleaning up Docker resources...");
+    
+    // Laad de tracker
+    let mut tracker = ResourceTracker::new();
+    
+    // Stop en verwijder geregistreerde containers
+    let tracked_containers = tracker.get_containers();
+    
+    if !tracked_containers.is_empty() {
+        println!("Stopping and removing {} tracked containers...", tracked_containers.len());
         
-        // In een echte toepassing zou je deze image kunnen gebruiken
-        // Voor dit voorbeeld blijven we bij de standaard image
+        for container_id in &tracked_containers {
+            // Stop de container met force optie indien nodig
+            let mut stop_cmd = Command::new("docker");
+            stop_cmd.arg("stop");
+            
+            if force {
+                stop_cmd.arg("-f");
+            }
+            
+            stop_cmd.arg(container_id);
+            let stop_result = stop_cmd.output()?;
+                
+            if !stop_result.status.success() {
+                println!("Warning: Container {} could not be stopped", container_id);
+                if !force {
+                    println!("  Tip: Use --force to forcefully stop and remove containers");
+                }
+                continue;
+            }
+            
+            let rm_result = Command::new("docker")
+                .args(["rm", container_id])
+                .output()?;
+                
+            if !rm_result.status.success() {
+                println!("Warning: Container {} could not be removed", container_id);
+            } else {
+                // Verwijder container uit de tracker
+                tracker.remove_container(container_id);
+            }
+        }
     } else {
-        println!("Geen Proxmox template gevonden op het standaard pad.");
-        println!("Standaard Docker image wordt gebruikt.");
+        println!("No tracked containers found");
     }
-
-    println!("Starting Docker service...");
     
-    // Start de Docker service
-    let (service, result_receiver) = DockerService::new(image_name, None)?;
+    // Bepaal welke images te verwijderen
+    let tracked_images = tracker.get_images();
     
-    println!("Zorg ervoor dat 'sshpass' geïnstalleerd is (op macOS: brew install hudochenkov/sshpass/sshpass).");
-    println!("Zorg ervoor dat 'sshpass' en 'scp' geïnstalleerd zijn voor SCP-functionaliteit.");
+    // Filter images op basis van include_base parameter
+    let images_to_remove: Vec<String> = if include_base {
+        tracked_images
+    } else {
+        // Verwijder alleen images met "heretek-" prefix en niet de base images
+        tracked_images.into_iter()
+            .filter(|img| img.starts_with("heretek-"))
+            .collect()
+    };
     
-    // Voorbeeld: voer een commando uit via de service
-    let command_id = "test-command-1";
-    let script = r#"
-    echo "Hallo vanuit Docker Alpine container via SCP!"
-    echo "Huidige map: $(pwd)"
-    echo "Bestanden in deze map:"
-    ls -la
-    echo "Systeem informatie:"
-    uname -a
-    "#;
-    
-    // Voeg wat omgevingsvariabelen toe als voorbeeld
-    let mut env_vars = HashMap::new();
-    env_vars.insert("TEST_VAR".to_string(), "Dit is een test variabele".to_string());
-    
-    println!("Executing command {}...", command_id);
-    service.execute_command(command_id, script, Some(env_vars), Some(Duration::from_secs(10)))?;
-    
-    // Wacht op het resultaat
-    if let Ok(result) = result_receiver.recv() {
-        println!("Command {} completed in {:?}", result.id, result.execution_time);
+    // Als remove_all=false, vraag dan alleen naar dangling images
+    let mut final_images = Vec::new();
+    if !remove_all {
+        let dangling_output = Command::new("docker")
+            .args(&["images", "--filter", "dangling=true", "-q"])
+            .output()?;
         
-        match result.output {
-            Ok(output) => {
-                println!("Exit status: {:?}", output.status);
-                println!("Stdout:");
-                io::stdout().write_all(&output.stdout)?;
-                println!("Stderr:");
-                io::stderr().write_all(&output.stderr)?;
-            },
-            Err(e) => {
-                println!("Command execution failed: {}", e);
+        let dangling_ids = String::from_utf8_lossy(&dangling_output.stdout);
+        let dangling_set: HashSet<_> = dangling_ids.trim().split('\n').collect();
+        
+        // Hou alleen de images over die ook in de dangling lijst staan
+        for img in &images_to_remove {
+            let inspect_output = Command::new("docker")
+                .args(&["inspect", "--format", "{{.Id}}", img])
+                .output()?;
+                
+            if inspect_output.status.success() {
+                let id = String::from_utf8_lossy(&inspect_output.stdout).trim().to_string();
+                if dangling_set.contains(id.as_str()) {
+                    final_images.push(img.clone());
+                }
+            }
+        }
+    } else {
+        final_images = images_to_remove;
+    }
+    
+    if !final_images.is_empty() {
+        println!("Removing {} images...", final_images.len());
+        
+        for image in &final_images {
+            let rmi_result = Command::new("docker")
+                .args(["rmi", "-f", image])
+                .output()?;
+                
+            if !rmi_result.status.success() {
+                println!("Warning: Image {} could not be removed", image);
+                stdout().write_all(&rmi_result.stderr)?;
+            } else {
+                // Verwijder image uit de tracker
+                tracker.remove_image(image);
+            }
+        }
+        
+        println!("Removed {} images", final_images.len());
+    } else {
+        println!("No images to remove");
+    }
+    
+    println!("✅ Cleanup complete!");
+    Ok(())
+}
+
+/// Toont een lijst van resources die door de container_executor worden bijgehouden
+fn list_resources(only_containers: bool, only_images: bool, detailed: bool) -> Result<(), Box<dyn Error>> {
+    let tracker = ResourceTracker::new();
+    
+    // Bepaal wat we moeten tonen (als beide false zijn, toon alles)
+    let show_containers = !only_images || only_containers;
+    let show_images = !only_containers || only_images;
+    
+    if show_containers {
+        let containers = tracker.get_containers();
+        println!("🐳 Tracked Containers ({})", containers.len());
+        
+        if containers.is_empty() {
+            println!("  No tracked containers found");
+        } else {
+            for (idx, container_id) in containers.iter().enumerate() {
+                println!("  {}. {}", idx + 1, container_id);
+                
+                if detailed {
+                    // Voeg gedetailleerde container informatie toe
+                    let inspect_output = Command::new("docker")
+                        .args(&["inspect", container_id])
+                        .output()?;
+                        
+                    if inspect_output.status.success() {
+                        let json_str = String::from_utf8_lossy(&inspect_output.stdout);
+                        println!("     Status: {}", get_container_status(&json_str));
+                        println!("     Created: {}", get_container_created(&json_str));
+                        println!("     Image: {}", get_container_image(&json_str));
+                    } else {
+                        println!("     (Container niet meer beschikbaar in Docker)");
+                    }
+                }
+            }
+        }
+        println!();
+    }
+    
+    if show_images {
+        let images = tracker.get_images();
+        println!("🖼️ Tracked Images ({})", images.len());
+        
+        if images.is_empty() {
+            println!("  No tracked images found");
+        } else {
+            for (idx, image_name) in images.iter().enumerate() {
+                println!("  {}. {}", idx + 1, image_name);
+                
+                if detailed {
+                    // Voeg gedetailleerde image informatie toe
+                    let inspect_output = Command::new("docker")
+                        .args(&["inspect", image_name])
+                        .output()?;
+                        
+                    if inspect_output.status.success() {
+                        let json_str = String::from_utf8_lossy(&inspect_output.stdout);
+                        println!("     Created: {}", get_image_created(&json_str));
+                        println!("     Size: {}", get_image_size(&json_str));
+                        println!("     Tags: {}", get_image_tags(&json_str));
+                    } else {
+                        println!("     (Image niet meer beschikbaar in Docker)");
+                    }
+                }
             }
         }
     }
     
-    // Nog een commando om te demonstreren dat we meerdere commando's kunnen uitvoeren
-    let command_id = "test-command-2";
-    let script = "echo 'Dit is een tweede test commando'";
-    
-    println!("Executing command {}...", command_id);
-    service.execute_command(command_id, script, None, None)?;
-    
-    // Wacht opnieuw op het resultaat
-    if let Ok(result) = result_receiver.recv() {
-        println!("Command {} completed", result.id);
-        if let Ok(output) = result.output {
-            io::stdout().write_all(&output.stdout)?;
+    Ok(())
+}
+
+// Helper functies voor het parsen van Docker inspect output
+fn get_container_status(json_str: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(array) = value.as_array() {
+            if let Some(obj) = array.get(0) {
+                if let Some(state) = obj.get("State") {
+                    if let Some(status) = state.get("Status") {
+                        if let Some(status_str) = status.as_str() {
+                            return status_str.to_string();
+                        }
+                    }
+                }
+            }
         }
     }
+    "Unknown".to_string()
+}
+
+fn get_container_created(json_str: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(array) = value.as_array() {
+            if let Some(obj) = array.get(0) {
+                if let Some(created) = obj.get("Created") {
+                    if let Some(created_str) = created.as_str() {
+                        return created_str.to_string();
+                    }
+                }
+            }
+        }
+    }
+    "Unknown".to_string()
+}
+
+fn get_container_image(json_str: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(array) = value.as_array() {
+            if let Some(obj) = array.get(0) {
+                if let Some(config) = obj.get("Config") {
+                    if let Some(image) = config.get("Image") {
+                        if let Some(image_str) = image.as_str() {
+                            return image_str.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    "Unknown".to_string()
+}
+
+fn get_image_created(json_str: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(array) = value.as_array() {
+            if let Some(obj) = array.get(0) {
+                if let Some(created) = obj.get("Created") {
+                    if let Some(created_str) = created.as_str() {
+                        return created_str.to_string();
+                    }
+                }
+            }
+        }
+    }
+    "Unknown".to_string()
+}
+
+fn get_image_size(json_str: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(array) = value.as_array() {
+            if let Some(obj) = array.get(0) {
+                if let Some(size) = obj.get("Size") {
+                    if let Some(size_num) = size.as_u64() {
+                        // Convert bytes to human-readable format
+                        if size_num < 1024 {
+                            return format!("{} B", size_num);
+                        } else if size_num < 1024 * 1024 {
+                            return format!("{:.2} KB", size_num as f64 / 1024.0);
+                        } else if size_num < 1024 * 1024 * 1024 {
+                            return format!("{:.2} MB", size_num as f64 / (1024.0 * 1024.0));
+                        } else {
+                            return format!("{:.2} GB", size_num as f64 / (1024.0 * 1024.0 * 1024.0));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    "Unknown".to_string()
+}
+
+fn get_image_tags(json_str: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(array) = value.as_array() {
+            if let Some(obj) = array.get(0) {
+                if let Some(repo_tags) = obj.get("RepoTags") {
+                    if let Some(tags_array) = repo_tags.as_array() {
+                        let tags: Vec<String> = tags_array
+                            .iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect();
+                        return tags.join(", ");
+                    }
+                }
+            }
+        }
+    }
+    "None".to_string()
+}
+
+fn build_base_image(image_name: &str, template_type: &str) -> Result<(), Box<dyn Error>> {
+    let temp_dir = tempfile::tempdir()?;
+    let dockerfile_path = temp_dir.path().join("Dockerfile");
     
-    // Stop de service netjes
-    println!("Stopping service...");
-    service.stop()?;
-    println!("Service stopped");
+    // Tracker bijwerken
+    let mut tracker = ResourceTracker::new();
+    
+    let dockerfile_content = match template_type {
+        "alpine" => format!(
+            "FROM alpine:latest\n\
+            RUN apk add --no-cache bash curl openssh-server openssh-client && \\\n\
+                mkdir -p /run/sshd && \\\n\
+                ssh-keygen -A && \\\n\
+                echo 'root:alpine' | chpasswd && \\\n\
+                echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config\n\
+            WORKDIR /scripts\n\
+            EXPOSE 22\n\
+            CMD [\"/usr/sbin/sshd\", \"-D\"]"
+        ),
+        "debian" => format!(
+            "FROM debian:stable-slim\n\
+            RUN apt-get update && apt-get install -y bash curl openssh-server openssh-client && \\\n\
+                mkdir -p /run/sshd && \\\n\
+                echo 'root:debian' | chpasswd && \\\n\
+                echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config\n\
+            WORKDIR /scripts\n\
+            EXPOSE 22\n\
+            CMD [\"/usr/sbin/sshd\", \"-D\"]"
+        ),
+        _ => return Err(format!("Unsupported template type: {}", template_type).into())
+    };
+    
+    std::fs::write(&dockerfile_path, dockerfile_content)?;
+    
+    println!("Building Docker image: {}", image_name);
+    let status = Command::new("docker")
+        .args(&["build", "-t", image_name, "-f", &dockerfile_path.to_string_lossy(), "."])
+        .current_dir(temp_dir.path())
+        .status()?;
+    
+    if !status.success() {
+        return Err(format!("Failed to build Docker image: {}", image_name).into());
+    }
+    
+    // Hou het image bij in de tracker
+    tracker.track_image(image_name);
     
     Ok(())
 }

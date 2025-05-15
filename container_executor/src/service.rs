@@ -31,8 +31,10 @@ pub struct CommandResult {
 // De Docker service structuur
 pub struct DockerService {
     sender: Sender<DockerServiceMessage>,
+    #[allow(dead_code)]
     docker_test: Arc<DockerTest>,
     is_running: Arc<Mutex<bool>>,
+    #[allow(dead_code)]
     template_type: Option<String>,
 }
 
@@ -45,11 +47,11 @@ impl DockerService {
         }
         
         // Maak een Docker test instantie
-        let docker_test = Arc::new(if let Some(path) = mount_path {
-            DockerTest::new(image_name).with_mount(path)
-        } else {
-            DockerTest::new(image_name)
-        });
+        let mut docker_test_instance = DockerTest::new(image_name);
+        if let Some(path) = mount_path {
+            docker_test_instance.with_mount(path);
+        }
+        let docker_test = Arc::new(docker_test_instance);
         
         // Kanalen voor communicatie
         let (tx, rx) = mpsc::channel::<DockerServiceMessage>();
@@ -125,14 +127,21 @@ impl DockerService {
         }
         
         // Maak een Docker test instantie met het Proxmox template
-        let docker_test = Arc::new(DockerTest::with_proxmox_template(template, template_path));
+        // Maak eerst een basis DockerTest met juiste image naam
+        let image_name = match &template {
+            ProxmoxTemplate::Alpine => "heretek-proxmox-alpine",
+            ProxmoxTemplate::Debian => "heretek-proxmox-debian",
+            ProxmoxTemplate::Custom(name) => &name,
+        };
+        
+        let mut docker_test = DockerTest::new(image_name);
         
         // Voeg mount pad toe indien nodig
-        let docker_test = if let Some(path) = mount_path {
-            Arc::new(Arc::get_mut(&mut Arc::clone(&docker_test)).unwrap().with_mount(path))
-        } else {
-            docker_test
-        };
+        if let Some(path) = mount_path {
+            docker_test.with_mount(path);
+        }
+        
+        let docker_test = Arc::new(docker_test);
         
         // Kanalen voor communicatie
         let (tx, rx) = mpsc::channel::<DockerServiceMessage>();
@@ -197,15 +206,13 @@ impl DockerService {
                         let (tx, rx) = mpsc::channel();
                         
                         let handle = thread::spawn(move || {
-                            let result = docker_test_clone.run_script(&script_clone);
+                            let result = docker_test_clone.run_script(&script_clone)
+                                                 .map_err(|e| e.to_string());
                             let _ = tx.send(result);
                         });
                         
                         match rx.recv_timeout(timeout_duration) {
-                            Ok(output) => match output {
-                                Ok(out) => Ok(out),
-                                Err(e) => Err(format!("Fout bij uitvoeren commando: {}", e)),
-                            },
+                            Ok(output) => output,
                             Err(_) => {
                                 // Timeout occurred, thread still running
                                 handle.thread().unpark();
@@ -214,10 +221,8 @@ impl DockerService {
                         }
                     } else {
                         // Geen timeout, voer direct uit
-                        match docker_test.run_script(&script_with_env) {
-                            Ok(out) => Ok(out),
-                            Err(e) => Err(format!("Fout bij uitvoeren commando: {}", e)),
-                        }
+                        docker_test.run_script(&script_with_env)
+                            .map_err(|e| format!("Fout bij uitvoeren commando: {}", e))
                     };
                     
                     // Stuur het resultaat
@@ -250,7 +255,7 @@ impl DockerTest {
         &self, 
         script: &str,
         env_vars: &HashMap<String, String>
-    ) -> Result<Output, Box<dyn Error>> {
+    ) -> Result<Output, String> {
         let env_prefix = env_vars.iter()
             .map(|(k, v)| format!("export {}=\"{}\"", k, v))
             .collect::<Vec<_>>()
@@ -258,5 +263,6 @@ impl DockerTest {
         
         let full_script = format!("{}\n{}", env_prefix, script);
         self.run_script(&full_script)
+            .map_err(|e| format!("Fout bij uitvoeren commando met env vars: {}", e))
     }
 }

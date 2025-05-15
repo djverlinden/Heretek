@@ -2,22 +2,19 @@
 name = "container_executor"
 version = "0.1.0"
 edition = "2021"
-authors = ["Heretek Team"]
-description = "Module voor het uitvoeren van bash scripts in containers, met ondersteuning voor Proxmox templates"
+description = "Docker container script executor"
 
 [dependencies]
+clap = { version = "4.4", features = ["derive"] }
 tempfile = "3.3.0"
-thiserror = "1.0.38"
-anyhow = "1.0.68"
+dirs = "5.0.1"
+sled = "0.34.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.25", features = ["full"] }
-log = "0.4"
-env_logger = "0.10"
 
-[dev-dependencies]
-assert_cmd = "2.0.8"
-predicates = "2.1.5"
+[lib]
+name = "container_executor"
+path = "src/lib.rs"
 
 [[bin]]
 name = "container_executor"
