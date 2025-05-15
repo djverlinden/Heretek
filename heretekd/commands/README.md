@@ -1,56 +1,56 @@
-# Proxmox Simulatie Commando's
+# Proxmox Simulation Commands
 
-Deze map bevat definities van commando's die gebruikt worden in de Proxmox-simulatieomgeving. De commando's zijn georganiseerd in verschillende structuren die specifieke versies en functionaliteit reflecteren.
+This directory contains definitions of commands used in the Proxmox simulation environment. The commands are organized in different structures that reflect specific versions and functionality.
 
-## Mapstructuur
+## Directory Structure
 
-De simulatie ondersteunt Proxmox VE versies 6, 7 en 8. De commando's zijn als volgt georganiseerd:
+The simulation supports Proxmox VE versions 6, 7, and 8. The commands are organized as follows:
 
 ```
 commands/
-├── common/        # Commando's gemeenschappelijk voor alle versies
-├── v6/            # Proxmox VE 6.x specifieke commando's
-├── v7/            # Proxmox VE 7.x specifieke commando's
-└── v8/            # Proxmox VE 8.x specifieke commando's
+├── common/        # Commands common to all versions
+├── v6/            # Proxmox VE 6.x specific commands
+├── v7/            # Proxmox VE 7.x specific commands
+└── v8/            # Proxmox VE 8.x specific commands
 ```
 
-## Commando Categorieën
+## Command Categories
 
-In elke map zijn commando's gegroepeerd per categorie in verschillende YAML-bestanden:
+In each directory, commands are grouped by category in different YAML files:
 
-- **container.yaml**: LXC container-gerelateerde commando's (pct)
-- **storage.yaml**: Opslag-gerelateerde commando's (zfs, pvesm)
-- **system.yaml**: Systeem-gerelateerde commando's (netwerk, cluster)
-- **version.yaml**: Versie-specifieke informatie (pveversion)
-- **vm.yaml**: VM-gerelateerde commando's (qm)
+- **container.yaml**: LXC container-related commands (pct)
+- **storage.yaml**: Storage-related commands (zfs, pvesm)
+- **system.yaml**: System-related commands (network, cluster)
+- **version.yaml**: Version-specific information (pveversion)
+- **vm.yaml**: VM-related commands (qm)
 
-## Gebruik
+## Usage
 
-Bij het uitvoeren van een commando zoekt het systeem eerst naar een exacte match in de versie-specifieke map. Als het commando daar niet wordt gevonden, wordt gezocht in de `common`-map voor commando's die voor alle versies gelden.
+When executing a command, the system first looks for an exact match in the version-specific directory. If the command is not found there, it searches the `common` directory for commands that apply to all versions.
 
-Wanneer nieuwe functionaliteit alleen in een specifieke Proxmox-versie beschikbaar is, moet deze in de betreffende versie-map worden toegevoegd.
+When new functionality is only available in a specific Proxmox version, it should be added to the corresponding version directory.
 
-## Formaat
+## Format
 
-Elk YAML-bestand gebruikt het volgende format:
+Each YAML file uses the following format:
 
 ```yaml
-# Beschrijving van de commando categorie
+# Description of the command category
 
-"commando string": |
-  output regel 1
-  output regel 2
+"command string": |
+  output line 1
+  output line 2
   ...
 
-"ander commando": |
-  andere output
+"another command": |
+  other output
   ...
 ```
 
-## Versies Bijwerken
+## Updating Versions
 
-Bij het toevoegen van ondersteuning voor een nieuwe Proxmox-versie:
-1. Maak een nieuwe map (bijvoorbeeld `v9/`)
-2. Kopieer relevante YAML-bestanden uit de vorige versie
-3. Update/voeg versie-specifieke commando's toe
-4. Update eventueel de shared commando's in de `common`-map
+When adding support for a new Proxmox version:
+1. Create a new directory (for example `v9/`)
+2. Copy relevant YAML files from the previous version
+3. Update/add version-specific commands
+4. Update shared commands in the `common` directory if necessary

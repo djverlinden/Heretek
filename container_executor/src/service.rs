@@ -7,8 +7,8 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-// Importeer de DockerTest structuur uit main.rs
-use crate::DockerTest;
+// Importeer de DockerTest structuur en Proxmox enums uit main.rs
+use crate::{DockerTest, ProxmoxTemplate};
 
 // Bericht types voor de service
 pub enum DockerServiceMessage {
@@ -33,6 +33,7 @@ pub struct DockerService {
     sender: Sender<DockerServiceMessage>,
     docker_test: Arc<DockerTest>,
     is_running: Arc<Mutex<bool>>,
+    template_type: Option<String>,
 }
 
 impl DockerService {
@@ -68,6 +69,7 @@ impl DockerService {
                 sender: tx,
                 docker_test,
                 is_running,
+                template_type: None,
             },
             result_rx
         ))
@@ -104,6 +106,63 @@ impl DockerService {
     // Controleer of de service nog draait
     pub fn is_running(&self) -> bool {
         *self.is_running.lock().unwrap()
+    }
+    
+    // Start een nieuwe Docker service met een Proxmox template
+    pub fn with_proxmox_template(
+        template: ProxmoxTemplate, 
+        template_path: PathBuf,
+        mount_path: Option<PathBuf>
+    ) -> Result<(Self, Receiver<CommandResult>), Box<dyn Error>> {
+        // Controleer of Docker beschikbaar is
+        if !DockerTest::is_docker_available() {
+            return Err("Docker is niet beschikbaar".into());
+        }
+        
+        // Controleer of template bestand bestaat
+        if !template_path.exists() {
+            return Err(format!("Proxmox template niet gevonden: {}", template_path.display()).into());
+        }
+        
+        // Maak een Docker test instantie met het Proxmox template
+        let docker_test = Arc::new(DockerTest::with_proxmox_template(template, template_path));
+        
+        // Voeg mount pad toe indien nodig
+        let docker_test = if let Some(path) = mount_path {
+            Arc::new(Arc::get_mut(&mut Arc::clone(&docker_test)).unwrap().with_mount(path))
+        } else {
+            docker_test
+        };
+        
+        // Kanalen voor communicatie
+        let (tx, rx) = mpsc::channel::<DockerServiceMessage>();
+        let (result_tx, result_rx) = mpsc::channel::<CommandResult>();
+        
+        let is_running = Arc::new(Mutex::new(true));
+        let is_running_clone = Arc::clone(&is_running);
+        let docker_test_clone = Arc::clone(&docker_test);
+        
+        // Start worker thread
+        thread::spawn(move || {
+            Self::worker_loop(rx, result_tx, docker_test_clone, is_running_clone);
+        });
+        
+        // Bepaal template type naam
+        let template_type = match &template {
+            ProxmoxTemplate::Alpine => Some("Alpine".to_string()),
+            ProxmoxTemplate::Debian => Some("Debian".to_string()),
+            ProxmoxTemplate::Custom(name) => Some(name.clone()),
+        };
+        
+        Ok((
+            DockerService {
+                sender: tx,
+                docker_test,
+                is_running,
+                template_type,
+            },
+            result_rx
+        ))
     }
     
     // De worker thread functie

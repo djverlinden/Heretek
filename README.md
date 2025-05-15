@@ -1,73 +1,73 @@
 # Heretek - Proxmox Mockup
 
-Heretek is een lokale mockup-server en CLI-toolset geschreven in Rust. Het biedt een lichtgewicht manier om commando's te simuleren, testen of in de toekomst door te sturen naar een echte Proxmox-server via SSH.
+Heretek is a local mockup server and CLI toolset written in Rust. It provides a lightweight way to simulate, test commands or in the future forward them to a real Proxmox server via SSH.
 
-## 🔧 Doel
+## 🔧 Goal
 
-- Simuleren van pct, zfs en andere Proxmox-achtige commando's.
-- Ontwikkel- en testomgeving zonder directe toegang tot Proxmox.
-- Ondersteuning voor verschillende Proxmox versies (6.x, 7.x, 8.x).
-- In de toekomst uitbreidbaar naar echte verbindingen via SSH.
+- Simulate pct, zfs and other Proxmox-like commands.
+- Development and test environment without direct access to Proxmox.
+- Support for different Proxmox versions (6.x, 7.x, 8.x).
+- Expandable to real connections via SSH in the future.
 
-## 📦 Opbouw
+## 📦 Structure
 
-1. heretekctl (de "control plane")
+1. heretekctl (the "control plane")
 
-   - Luistert op poort 9001.
-   - Ontvangt en verwerkt commando's.
-   - Implementeert basis mock-functies voor pct en zfs commando's.
+   - Listens on port 9001.
+   - Receives and processes commands.
+   - Implements basic mock functions for pct and zfs commands.
 
-2. heretekd (de "dispatcher")
-   - Luistert op poort 2222.
-   - Ontvangt commando's van een client (bijv. een bash-script).
-   - Gebruikt MockServer om commando's af te handelen of stuurt ze door naar heretekctl.
-   - Ondersteunt verschillende Proxmox versies via configuratie.
+2. heretekd (the "dispatcher")
+   - Listens on port 2222.
+   - Receives commands from a client (e.g., a bash script).
+   - Uses MockServer to handle commands or forwards them to heretekctl.
+   - Supports different Proxmox versions via configuration.
 
-## ▶️ Voorbeeldflow (lokaal)
+## ▶️ Example Flow (local)
 
-[ bash script ] —> [ heretekd (port 2222) ] —> [ MockServer of heretekctl (port 9001) ]
+[ bash script ] —> [ heretekd (port 2222) ] —> [ MockServer or heretekctl (port 9001) ]
 
 ## 🚀 Setup
 
-### Vereisten
+### Requirements
 
 - Rust toolchain: https://rustup.rs
 - cargo CLI
-- netcat (voor tests via bash)
+- netcat (for tests via bash)
 
-### Configuratie
+### Configuration
 
-In het bestand `config.toml` kun je de volgende instellingen aanpassen:
+In the `config.toml` file you can adjust the following settings:
 
 ```toml
 [heretekd]
 host = "127.0.0.1"  # Server hostname
-port = 2222         # Server poort
+port = 2222         # Server port
 
 [heretekctl]
 host = "127.0.0.1"  # Control hostname
-port = 9001         # Control poort
+port = 9001         # Control port
 
 [proxmox]
-version = "8"       # Proxmox versie (6, 7 of 8)
+version = "8"       # Proxmox version (6, 7 or 8)
 ```
 
-Je kunt de huidige configuratie controleren met:
+You can check the current configuration with:
 
 ```bash
 ./check-version.sh
 ```
 
-## Installatie
+## Installation
 
-1. Clone deze repo:
+1. Clone this repo:
 
 ```bash
 git clone https://github.com/djverlinden/Heretek
 cd heretek
 ```
 
-2. Voeg dependencies toe:
+2. Add dependencies:
 
 ```bash
 cargo add tokio --features full
@@ -75,7 +75,7 @@ cargo add chrono
 cargo add serde
 ```
 
-3. Start beide services:
+3. Start both services:
 
 Terminal 1 – start heretekctl:
 
@@ -95,7 +95,7 @@ Test via bash:
 ./test-command.sh
 ```
 
-Inhoud van test-command.sh:
+Content of test-command.sh:
 
 ```bash
 #!/bin/bash
@@ -103,96 +103,96 @@ HOST="127.0.0.1"
 PORT="2222"
 COMMAND="pct list"
 
-echo "🔧 Verstuur commando: '$COMMAND' naar $HOST:$PORT"
+echo "🔧 Sending command: '$COMMAND' to $HOST:$PORT"
 echo "$COMMAND" | nc "$HOST" "$PORT"
-echo "✅ Command verzonden"
+echo "✅ Command sent"
 
-# Voorbeeld om de Proxmox versie te wijzigen:
+# Example to change the Proxmox version:
 # RESPONSE=$(echo "heretek-setversion 7" | nc "$HOST" "$PORT")
-# echo "Versie gewijzigd: $RESPONSE"
+# echo "Version changed: $RESPONSE"
 ```
 
-## 🧪 Testen
+## 🧪 Testing
 
-De codebase bevat verschillende testen:
+The codebase contains various tests:
 
 - Unit tests: `cargo test`
 - Integration tests: `cargo test -- --ignored`
 
-### Het schrijven van tests
+### Writing tests
 
 1. **MockServer tests:**
 
    ```rust
    #[test]
-   fn test_nieuwe_functie() {
+   fn test_new_function() {
        let mock = MockServer::new();
-       let response = mock.handle_command("nieuw commando");
-       assert!(response.contains("verwachte_uitvoer"));
+       let response = mock.handle_command("new command");
+       assert!(response.contains("expected_output"));
    }
    ```
 
 2. **Client-server tests:**
    ```rust
    #[test]
-   #[ignore] // Gebruik --ignored vlag bij test uitvoering
+   #[ignore] // Use --ignored flag during test execution
    fn test_server_response() {
        let mut stream = TcpStream::connect("127.0.0.1:2222").unwrap();
-       // Test logica hier
+       // Test logic here
    }
    ```
 
 ## 🔍 Logging & Debugging
 
-- Elke component logt naar stdout met timestamp en emoji's voor visuele herkenning.
-- Verbindingen, commando's en fouten worden live getoond.
-- Bij het opstarten van de server wordt de gesimuleerde Proxmox versie weergegeven.
+- Each component logs to stdout with timestamp and emojis for visual recognition.
+- Connections, commands, and errors are displayed live.
+- When starting the server, the simulated Proxmox version is displayed.
 
 ## 🌐 Roadmap
 
-- SSH-ondersteuning voor verbinding met echte Proxmox-server
+- SSH support for connection with real Proxmox server
 - Command history + replay
-- WebSocket-ondersteuning
-- Uitbreidbare mock-modules (pct, zfs, pveam, etc.)
-- Uitgebreidere versie-specifieke configuratie en commando-ondersteuning
+- WebSocket support
+- Extensible mock modules (pct, zfs, pveam, etc.)
+- More extensive version-specific configuration and command support
 
-## 🔄 Proxmox Versies
+## 🔄 Proxmox Versions
 
-Heretek ondersteunt het simuleren van drie Proxmox VE versies:
+Heretek supports simulating three Proxmox VE versions:
 
-- **Proxmox VE 6.x** - Basis functionaliteit, sommige commando's zijn niet beschikbaar
-- **Proxmox VE 7.x** - Uitgebreidere functionaliteit met meer commando-ondersteuning
-- **Proxmox VE 8.x** - Alle geïmplementeerde functionaliteit beschikbaar (standaard)
+- **Proxmox VE 6.x** - Basic functionality, some commands are not available
+- **Proxmox VE 7.x** - More extensive functionality with more command support
+- **Proxmox VE 8.x** - All implemented functionality available (default)
 
-Je kunt de versie op verschillende manieren wijzigen:
+You can change the version in different ways:
 
-1. Via het `config.toml` bestand (permanent):
+1. Via the `config.toml` file (permanent):
    ```toml
    [proxmox]
-   version = "7"  # Verander naar 6, 7 of 8
+   version = "7"  # Change to 6, 7 or 8
    ```
 
-2. Via een commando vanuit een extern programma (bijvoorbeeld in een bash script):
+2. Via a command from an external program (for example in a bash script):
    ```bash
-   # Wijzig naar Proxmox versie 7
+   # Change to Proxmox version 7
    echo "heretek-setversion 7" | nc "$HOST" "$PORT"
    
-   # Controleer huidige versie
+   # Check current version
    echo "pveversion" | nc "$HOST" "$PORT"
    ```
 
-## 👨‍💻 Voor wie?
+## 👨‍💻 For whom?
 
-- Infra-architecten
-- Systeembeheerders die lokaal willen testen
-- Developers die willen mocken zonder side-effects op echte servers
+- Infrastructure architects
+- System administrators who want to test locally
+- Developers who want to mock without side effects on real servers
 
-## 📝 Beschikbare speciale commando's
+## 📝 Available special commands
 
-Naast reguliere Proxmox commando's, ondersteunt Heretek ook speciale commando's:
+Besides regular Proxmox commands, Heretek also supports special commands:
 
-- `pveversion` - Toont informatie over de huidige gesimuleerde Proxmox-versie
-- `heretek-setversion <versie>` - Wijzigt de actieve Proxmox-versie (6, 7 of 8)
+- `pveversion` - Shows information about the current simulated Proxmox version
+- `heretek-setversion <version>` - Changes the active Proxmox version (6, 7 or 8)
 
 ⸻
 

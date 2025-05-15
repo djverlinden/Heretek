@@ -1,9 +1,9 @@
 [package]
-name = "docker_test"
+name = "container_executor"
 version = "0.1.0"
 edition = "2021"
 authors = ["Heretek Team"]
-description = "Docker test module voor het testen van bash scripts in containers"
+description = "Module voor het uitvoeren van bash scripts in containers, met ondersteuning voor Proxmox templates"
 
 [dependencies]
 tempfile = "3.3.0"
@@ -20,5 +20,5 @@ assert_cmd = "2.0.8"
 predicates = "2.1.5"
 
 [[bin]]
-name = "docker_test"
+name = "container_executor"
 path = "src/main.rs"
